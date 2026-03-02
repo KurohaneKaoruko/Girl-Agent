@@ -19,4 +19,4 @@ axum = "0.7"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
 url = "2"
-girlagent-core = { git = "https://github.com/KurohaneKaoruko/Girl-Agent-Core.git", rev = "0c7f233fcdd204b4bc77689faffe25c7973be97b" }
+girlagent-core = { git = "https://github.com/KurohaneKaoruko/Girl-Agent-Core.git", rev = "ac668553e1846adc0618f868bb1ba096f232a4ff" }

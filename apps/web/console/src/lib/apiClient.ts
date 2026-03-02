@@ -3,6 +3,8 @@ import type {
   AgentConfig,
   ApiError,
   AppBootstrap,
+  ChatWithAgentRequest,
+  ChatWithAgentResponse,
   CreateAgentRequest,
   CreateModelRequest,
   CreateProviderRequest,
@@ -27,6 +29,7 @@ export type ApiClient = {
   createAgent(input: CreateAgentRequest): Promise<AgentConfig>;
   updateAgent(id: string, input: UpdateAgentRequest): Promise<AgentConfig>;
   deleteAgent(id: string): Promise<void>;
+  chatWithAgent(input: ChatWithAgentRequest): Promise<ChatWithAgentResponse>;
 };
 
 function isTauriRuntime(): boolean {
@@ -150,6 +153,10 @@ class DesktopClient implements ApiClient {
   deleteAgent(id: string) {
     return invokeCommand<void>("delete_agent", { id });
   }
+
+  chatWithAgent(input: ChatWithAgentRequest) {
+    return invokeCommand<ChatWithAgentResponse>("chat_with_agent", { input });
+  }
 }
 
 class HeadlessClient implements ApiClient {
@@ -256,6 +263,13 @@ class HeadlessClient implements ApiClient {
 
   deleteAgent(id: string) {
     return this.request<void>(`/api/agents/${id}`, { method: "DELETE" });
+  }
+
+  chatWithAgent(input: ChatWithAgentRequest) {
+    return this.request<ChatWithAgentResponse>("/api/chat", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 }
 

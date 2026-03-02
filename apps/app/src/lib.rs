@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use girlagent_core::{
-    AppService, AppResult, CreateAgentRequest, CreateModelRequest, CreateProviderRequest,
-    ErrorPayload, SqliteStore, UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
+    AppService, AppResult, ChatWithAgentRequest, ChatWithAgentResponse, CreateAgentRequest,
+    CreateModelRequest, CreateProviderRequest, ErrorPayload, OpenAICompatChatGateway, SqliteStore,
+    UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
 };
 use tauri::State;
 
@@ -11,6 +12,7 @@ type CommandResult<T> = Result<T, ErrorPayload>;
 #[derive(Clone)]
 struct AppState {
     service: AppService<SqliteStore>,
+    chat_gateway: OpenAICompatChatGateway,
 }
 
 fn map_command_result<T>(result: AppResult<T>) -> CommandResult<T> {
@@ -112,13 +114,24 @@ async fn delete_agent(state: State<'_, AppState>, id: String) -> CommandResult<(
     map_command_result(state.service.delete_agent(&id).await)
 }
 
+#[tauri::command]
+async fn chat_with_agent(
+    state: State<'_, AppState>,
+    input: ChatWithAgentRequest,
+) -> CommandResult<ChatWithAgentResponse> {
+    map_command_result(state.service.chat_with_agent(&state.chat_gateway, input).await)
+}
+
 pub fn run() {
     let store = tauri::async_runtime::block_on(SqliteStore::connect(&database_url()))
         .expect("failed to initialize sqlite store");
     let service = AppService::new(Arc::new(store), "少女智能体", "0.1.0");
 
     tauri::Builder::default()
-        .manage(AppState { service })
+        .manage(AppState {
+            service,
+            chat_gateway: OpenAICompatChatGateway::new(),
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             get_bootstrap_data,
@@ -133,7 +146,8 @@ pub fn run() {
             list_agents,
             create_agent,
             update_agent,
-            delete_agent
+            delete_agent,
+            chat_with_agent
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GirlAgent");

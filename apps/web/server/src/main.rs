@@ -5,13 +5,14 @@ use axum::{
     http::{header, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{get, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use girlagent_core::error::ErrorPayload;
 use girlagent_core::{
-    AppError, AppService, CreateAgentRequest, CreateModelRequest, CreateProviderRequest,
-    SqliteStore, UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
+    AppError, AppService, ChatWithAgentRequest, ChatWithAgentResponse, CreateAgentRequest,
+    CreateModelRequest, CreateProviderRequest, OpenAICompatChatGateway, SqliteStore,
+    UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
 };
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
@@ -19,6 +20,7 @@ use uuid::Uuid;
 #[derive(Clone)]
 struct AppState {
     service: AppService<SqliteStore>,
+    chat_gateway: OpenAICompatChatGateway,
     bearer_token: String,
 }
 
@@ -38,6 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store = SqliteStore::connect(&db_url).await?;
     let state = AppState {
         service: AppService::new(Arc::new(store), "GirlAgent", "0.1.0"),
+        chat_gateway: OpenAICompatChatGateway::new(),
         bearer_token: token,
     };
 
@@ -60,6 +63,7 @@ fn build_router(state: AppState) -> Router {
         .route("/api/models/{id}", put(update_model).delete(delete_model))
         .route("/api/agents", get(list_agents).post(create_agent))
         .route("/api/agents/{id}", put(update_agent).delete(delete_agent))
+        .route("/api/chat", post(chat_with_agent))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     Router::new()
@@ -242,5 +246,17 @@ async fn delete_agent(
         .delete_agent(&id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn chat_with_agent(
+    State(state): State<AppState>,
+    Json(input): Json<ChatWithAgentRequest>,
+) -> ApiResponse<ChatWithAgentResponse> {
+    state
+        .service
+        .chat_with_agent(&state.chat_gateway, input)
+        .await
+        .map(Json)
         .map_err(map_error)
 }

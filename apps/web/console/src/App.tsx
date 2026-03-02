@@ -11,6 +11,7 @@ import type {
   AgentConfig,
   ApiError,
   AppBootstrap,
+  ChatMessage,
   CreateAgentRequest,
   CreateModelRequest,
   CreateProviderRequest,
@@ -26,6 +27,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "provider", label: "提供商设置" },
   { key: "model", label: "模型设置" },
   { key: "agent", label: "智能体设置" },
+  { key: "chat", label: "对话测试" },
 ];
 
 const fallbackBootstrap: AppBootstrap = {
@@ -48,6 +50,10 @@ export function App() {
   const [error, setError] = useState<ApiError | null>(null);
   const [headlessBaseUrl, setHeadlessBaseUrl] = useState(() => getHeadlessConfig().baseUrl);
   const [headlessToken, setHeadlessToken] = useState(() => getHeadlessConfig().token);
+  const [chatAgentId, setChatAgentId] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatModelId, setChatModelId] = useState("");
 
   const withAction = useCallback(async (action: () => Promise<void>) => {
     setSaving(true);
@@ -84,6 +90,12 @@ export function App() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (!chatAgentId && agents.length > 0) {
+      setChatAgentId(agents[0].id);
+    }
+  }, [agents, chatAgentId]);
 
   const tabContent = useMemo(() => {
     if (activeTab === "provider") {
@@ -140,6 +152,99 @@ export function App() {
         />
       );
     }
+    if (activeTab === "chat") {
+      return (
+        <section className="panel">
+          <header className="panel-header">
+            <h2>对话测试</h2>
+          </header>
+          <div className="card">
+            <label>
+              选择智能体
+              <select
+                onChange={(event) => setChatAgentId(event.target.value)}
+                value={chatAgentId}
+              >
+                {agents.length === 0 && <option value="">暂无智能体</option>}
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="chat-log">
+              {chatMessages.length === 0 && (
+                <p className="hint">发送第一条消息开始测试模型回复。</p>
+              )}
+              {chatMessages.map((item, index) => (
+                <div
+                  className={item.role === "assistant" ? "chat-bubble assistant" : "chat-bubble user"}
+                  key={`${item.role}-${index}`}
+                >
+                  <strong>{item.role === "assistant" ? "少女智能体" : "你"}</strong>
+                  <p>{item.content}</p>
+                </div>
+              ))}
+            </div>
+
+            <label>
+              输入消息
+              <textarea
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="输入你想说的话..."
+                rows={4}
+                value={chatInput}
+              />
+            </label>
+
+            <div className="actions">
+              <button
+                className="primary"
+                disabled={saving || !chatAgentId || !chatInput.trim()}
+                onClick={() =>
+                  withAction(async () => {
+                    const userMessage = chatInput.trim();
+                    const history = [...chatMessages];
+                    const result = await api.chatWithAgent({
+                      agentId: chatAgentId,
+                      userMessage,
+                      history,
+                      temperature: null,
+                      maxTokens: null,
+                    });
+
+                    setChatMessages((previous) => [
+                      ...previous,
+                      { role: "user", content: userMessage },
+                      { role: "assistant", content: result.message },
+                    ]);
+                    setChatInput("");
+                    setChatModelId(result.modelId);
+                  })
+                }
+                type="button"
+              >
+                发送
+              </button>
+              <button
+                className="ghost"
+                onClick={() => {
+                  setChatMessages([]);
+                  setChatModelId("");
+                }}
+                type="button"
+              >
+                清空会话
+              </button>
+            </div>
+
+            {chatModelId && <small className="hint">最近回复模型：{chatModelId}</small>}
+          </div>
+        </section>
+      );
+    }
     return (
       <AgentSettings
         agents={agents}
@@ -169,6 +274,10 @@ export function App() {
     activeTab,
     agents,
     bootstrap.providerPresets,
+    chatAgentId,
+    chatInput,
+    chatMessages,
+    chatModelId,
     models,
     providers,
     saving,

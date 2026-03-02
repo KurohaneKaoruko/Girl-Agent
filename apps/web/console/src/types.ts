@@ -118,4 +118,26 @@ export type CreateAgentRequest = {
 
 export type UpdateAgentRequest = CreateAgentRequest;
 
-export type TabKey = "provider" | "model" | "agent";
+export type ChatMessageRole = "system" | "user" | "assistant" | "tool";
+
+export type ChatMessage = {
+  role: ChatMessageRole;
+  content: string;
+};
+
+export type ChatWithAgentRequest = {
+  agentId: string;
+  userMessage: string;
+  history: ChatMessage[];
+  temperature: number | null;
+  maxTokens: number | null;
+};
+
+export type ChatWithAgentResponse = {
+  agentId: string;
+  modelRefId: string;
+  modelId: string;
+  message: string;
+};
+
+export type TabKey = "provider" | "model" | "agent" | "chat";
