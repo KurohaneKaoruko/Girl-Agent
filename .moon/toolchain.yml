@@ -1,0 +1,8 @@
+$schema: "https://moonrepo.dev/schemas/toolchain.json"
+
+node:
+  packageManager: "pnpm"
+  version: "20.18.0"
+
+rust:
+  version: "stable"

@@ -1,0 +1,11 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "javascript"
+
+tasks:
+  dev:
+    command: "pnpm"
+    args: ["dev"]
+
+  build:
+    command: "pnpm"
+    args: ["build"]

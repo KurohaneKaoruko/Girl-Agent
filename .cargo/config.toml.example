@@ -1,0 +1,6 @@
+# Optional local override for Core development.
+# Copy this file to `.cargo/config.toml` when you want the app repo
+# to use a local checkout of GirlAgent-Core instead of the Git remote.
+
+[patch."ssh://git@github.com/KurohaneKaoruko/Girl-Agent-Core.git"]
+girlagent-core = { path = "../GirlAgent-Core" }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "少女智能体",
+  "version": "0.1.0",
+  "identifier": "com.girlagent.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --dir ../../web/console dev",
+    "beforeBuildCommand": "pnpm --dir ../../web/console build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../../web/console/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "少女智能体",
+        "width": 1200,
+        "height": 820,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": []
+  }
+}

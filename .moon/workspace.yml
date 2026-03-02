@@ -1,0 +1,10 @@
+$schema: "https://moonrepo.dev/schemas/workspace.json"
+
+projects:
+  web-server: "apps/web/server"
+  web-console: "apps/web/console"
+  desktop: "apps/desktop/app"
+
+vcs:
+  defaultBranch: "main"
+  manager: "git"

@@ -1,0 +1,76 @@
+# ------------------------------------------------------------
+# Logs / runtime artifacts
+# ------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ------------------------------------------------------------
+# Environment / secrets
+# ------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env*.example
+.cargo/config.toml
+*.db
+*.db-shm
+*.db-wal
+
+# ------------------------------------------------------------
+# Node / frontend
+# ------------------------------------------------------------
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.cache/
+.parcel-cache/
+.vite/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Test tooling artifacts
+playwright-report/
+test-results/
+
+# ------------------------------------------------------------
+# Rust / Cargo
+# ------------------------------------------------------------
+target/
+**/*.rs.bk
+
+# ------------------------------------------------------------
+# Tauri
+# ------------------------------------------------------------
+apps/desktop/app/gen/
+apps/desktop/app/target/
+apps/desktop/app/.tauri/
+
+# Moonrepo
+.moon/cache/
+
+# Optional local checkout of independent Core repository
+GirlAgent-Core/
+
+# ------------------------------------------------------------
+# IDE / editor
+# ------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ------------------------------------------------------------
+# OS junk files
+# ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/

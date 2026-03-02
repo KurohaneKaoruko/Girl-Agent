@@ -1,0 +1,17 @@
+$schema: "https://moonrepo.dev/schemas/project.json"
+language: "rust"
+
+tasks:
+  check:
+    command: "cargo"
+    args:
+      - "check"
+      - "-p"
+      - "girlagent-web-server"
+
+  dev:
+    command: "cargo"
+    args:
+      - "run"
+      - "-p"
+      - "girlagent-web-server"
