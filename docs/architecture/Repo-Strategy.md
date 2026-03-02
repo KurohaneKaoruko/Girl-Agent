@@ -45,7 +45,7 @@ Core 必须保持“宿主无关”：
 当前仓库作为应用层开发仓（Monorepo）维护：
 
 - `apps/web/`
-- `apps/desktop/`
+- `apps/app/`
 
 并通过 Git 依赖使用独立 Core 仓库：
 

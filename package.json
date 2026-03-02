@@ -5,14 +5,14 @@
   "packageManager": "pnpm@10.6.0",
   "scripts": {
     "dev:web": "pnpm --dir apps/web/console dev",
-    "dev:desktop": "cargo tauri dev --manifest-path apps/desktop/app/Cargo.toml",
+    "dev:app": "cargo tauri dev --manifest-path apps/app/Cargo.toml",
     "build:web": "pnpm --dir apps/web/console build",
-    "build:desktop": "cargo tauri build --manifest-path apps/desktop/app/Cargo.toml",
+    "build:app": "cargo tauri build --manifest-path apps/app/Cargo.toml",
     "run:web-server": "cargo run -p girlagent-web-server",
     "check:rust": "cargo check --workspace",
     "check:web-server": "cargo check -p girlagent-web-server",
-    "check:desktop": "cargo check -p girlagent-desktop",
-    "moon:check": "moon run web-server:check && moon run desktop:check"
+    "check:app": "cargo check -p girlagent-app",
+    "moon:check": "moon run web-server:check && moon run app:check"
   },
   "devDependencies": {
     "@moonrepo/cli": "^1.30.6"

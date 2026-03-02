@@ -7,7 +7,7 @@ tasks:
     args:
       - "check"
       - "-p"
-      - "girlagent-desktop"
+      - "girlagent-app"
 
   dev:
     command: "cargo"

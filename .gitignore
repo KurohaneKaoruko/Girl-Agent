@@ -49,9 +49,9 @@ target/
 # ------------------------------------------------------------
 # Tauri
 # ------------------------------------------------------------
-apps/desktop/app/gen/
-apps/desktop/app/target/
-apps/desktop/app/.tauri/
+apps/app/gen/
+apps/app/target/
+apps/app/.tauri/
 
 # Moonrepo
 .moon/cache/

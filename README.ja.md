@@ -9,11 +9,11 @@ GirlAgent は、あらゆる AI アプリケーションに接続できる高機
 ```text
 GirlAgent/
 ├─ docs/                        # プロダクト・アーキテクチャ文書
-├─ apps/web/
-│  ├─ server/                   # ヘッドレスホスト（Axum + Bearer 認証）
-│  └─ console/                  # 共有 Web UI
-└─ apps/desktop/
-   └─ app/                      # デスクトップホスト（Tauri + Rust）
+└─ apps/
+   ├─ web/
+   │  ├─ server/                # ヘッドレスホスト（Axum + Bearer 認証）
+   │  └─ console/               # 共有 Web UI
+   └─ app/                      # アプリホスト（現行は Tauri + Rust）
 ```
 
 Core は独立リポジトリから参照します:
@@ -22,11 +22,11 @@ Core は独立リポジトリから参照します:
 
 ## 技術スタック
 
-- バックエンド: Rust（ホスト非依存コア + デスクトップ/ヘッドレスホスト）
-- デスクトップホスト: Tauri 2.x
+- バックエンド: Rust（ホスト非依存コア + アプリ/ヘッドレスホスト）
+- アプリホスト: Tauri 2.x
 - ヘッドレスホスト: Axum HTTP サービス
 - フロントエンド: React + TypeScript + Vite
-- データ契約: desktop invoke と HTTP API で共通契約を使用
+- データ契約: アプリホスト invoke と HTTP API で共通契約を使用
 - オーケストレーション: Cargo workspace + pnpm workspace + Moonrepo
 
 ## クイックスタート
@@ -37,16 +37,16 @@ Core は独立リポジトリから参照します:
 pnpm install
 ```
 
-2. デスクトップ版を起動（Rust ツールチェーン内の Tauri CLI が必要）:
+2. アプリホストを起動（現行はデスクトップ形態、Rust ツールチェーン内の Tauri CLI が必要）:
 
 ```powershell
-cargo tauri dev --manifest-path apps/desktop/app/Cargo.toml
+cargo tauri dev --manifest-path apps/app/Cargo.toml
 ```
 
-3. デスクトップ版をビルド:
+3. アプリホストをビルド（現行はデスクトップ形態）:
 
 ```powershell
-cargo tauri build --manifest-path apps/desktop/app/Cargo.toml
+cargo tauri build --manifest-path apps/app/Cargo.toml
 ```
 
 4. ヘッドレス版を起動（既定 `127.0.0.1:8787`）:
@@ -60,7 +60,7 @@ cargo run -p girlagent-web-server
 
 - プロジェクト骨組みを初期化済み
 - 核心原則を定義済み: あらゆる AI アプリに接続
-- デスクトップ + ヘッドレスの最小実装を提供済み
+- アプリホスト + ヘッドレスの最小実装を提供済み
 - 設定画面の基本 UI 骨組み:
   - Provider 設定
   - Model 設定

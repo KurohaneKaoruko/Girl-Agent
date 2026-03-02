@@ -9,11 +9,11 @@
 ```text
 GirlAgent/
 ├─ docs/                        # 产品与架构文档
-├─ apps/web/
-│  ├─ server/                   # 无头宿主（Axum + Bearer）
-│  └─ console/                  # Web 管理界面（React/Vite）
-└─ apps/desktop/
-   └─ app/                      # 桌面宿主（Tauri）
+└─ apps/
+   ├─ web/
+   │  ├─ server/                # 无头宿主（Axum + Bearer）
+   │  └─ console/               # Web 管理界面（React/Vite）
+   └─ app/                      # 应用宿主（当前基于 Tauri）
 ```
 
 核心库使用独立仓库依赖：
@@ -22,11 +22,11 @@ GirlAgent/
 
 ## 技术栈
 
-- 后端：Rust（宿主无关核心 + 桌面/无头宿主）
-- 桌面宿主：Tauri 2.x
+- 后端：Rust（宿主无关核心 + 应用/无头宿主）
+- 应用宿主：Tauri 2.x
 - 无头宿主：Axum HTTP 服务
 - 前端：React + TypeScript + Vite
-- 数据契约：桌面 invoke 与 HTTP API 共享契约
+- 数据契约：应用宿主 invoke 与 HTTP API 共享契约
 - 工程编排：Cargo workspace + pnpm workspace + Moonrepo
 
 ## 快速开始
@@ -37,16 +37,16 @@ GirlAgent/
 pnpm install
 ```
 
-2. 启动桌面版（需要 Rust 工具链中的 Tauri CLI）：
+2. 启动应用端（当前桌面形态，需要 Rust 工具链中的 Tauri CLI）：
 
 ```powershell
-cargo tauri dev --manifest-path apps/desktop/app/Cargo.toml
+cargo tauri dev --manifest-path apps/app/Cargo.toml
 ```
 
-3. 构建桌面版：
+3. 构建应用端（当前桌面形态）：
 
 ```powershell
-cargo tauri build --manifest-path apps/desktop/app/Cargo.toml
+cargo tauri build --manifest-path apps/app/Cargo.toml
 ```
 
 4. 启动无头版（默认监听 `127.0.0.1:8787`）：
@@ -60,7 +60,7 @@ cargo run -p girlagent-web-server
 
 - 已初始化项目框架
 - 已确立核心准则：连接任意 AI 应用
-- 已交付双运行形态最小实现：桌面版 + 无头版
+- 已交付双运行形态最小实现：应用端 + 无头版
 - 已搭建核心设置页骨架：
   - 提供商设置
   - 模型设置

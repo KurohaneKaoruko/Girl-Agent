@@ -8,9 +8,10 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
+use girlagent_core::error::ErrorPayload;
 use girlagent_core::{
     AppError, AppService, CreateAgentRequest, CreateModelRequest, CreateProviderRequest,
-    ErrorPayload, SqliteStore, UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
+    SqliteStore, UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
 };
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;

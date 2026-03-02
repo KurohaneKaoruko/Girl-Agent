@@ -14,14 +14,14 @@
 - `GirlAgent-Core`
 - `apps/web/server`
 - `apps/web/console`
-- `apps/desktop/app`
+- `apps/app`
 
 ## 映射关系
 
 - `src-core/**` -> `GirlAgent-Core/**`
 - `src-headless/**` -> `apps/web/server/**`
 - `src-frontend/**` -> `apps/web/console/**`
-- `src-tauri/**` -> `apps/desktop/app/**`
+- `src-tauri/**` -> `apps/app/**`
 
 ## 同步调整
 

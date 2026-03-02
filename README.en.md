@@ -9,11 +9,11 @@ GirlAgent is an AI agent platform for building a feature-rich "girl agent" that 
 ```text
 GirlAgent/
 ├─ docs/                        # Product and architecture documents
-├─ apps/web/
-│  ├─ server/                   # Headless host (Axum + Bearer auth)
-│  └─ console/                  # Shared web UI
-└─ apps/desktop/
-   └─ app/                      # Desktop host (Tauri + Rust)
+└─ apps/
+   ├─ web/
+   │  ├─ server/                # Headless host (Axum + Bearer auth)
+   │  └─ console/               # Shared web UI
+   └─ app/                      # App host (currently powered by Tauri + Rust)
 ```
 
 Core is consumed from an independent repository:
@@ -22,11 +22,11 @@ Core is consumed from an independent repository:
 
 ## Tech Stack
 
-- Backend: Rust (host-agnostic core + desktop/headless hosts)
-- Desktop host: Tauri 2.x
+- Backend: Rust (host-agnostic core + app/headless hosts)
+- App host: Tauri 2.x
 - Headless host: Axum HTTP service
 - Frontend: React + TypeScript + Vite
-- Data contract: shared API contract for desktop invoke and HTTP API
+- Data contract: shared API contract for app-host invoke and HTTP API
 - Orchestration: Cargo workspace + pnpm workspace + Moonrepo
 
 ## Quick Start
@@ -37,16 +37,16 @@ Core is consumed from an independent repository:
 pnpm install
 ```
 
-2. Start desktop app (requires Tauri CLI in Rust toolchain):
+2. Start app host (current desktop form, requires Tauri CLI in Rust toolchain):
 
 ```powershell
-cargo tauri dev --manifest-path apps/desktop/app/Cargo.toml
+cargo tauri dev --manifest-path apps/app/Cargo.toml
 ```
 
-3. Build desktop app:
+3. Build app host (current desktop form):
 
 ```powershell
-cargo tauri build --manifest-path apps/desktop/app/Cargo.toml
+cargo tauri build --manifest-path apps/app/Cargo.toml
 ```
 
 4. Start headless host (default `127.0.0.1:8787`):
@@ -60,7 +60,7 @@ cargo run -p girlagent-web-server
 
 - Project framework initialized
 - Core principle defined: connect to any AI application
-- Minimal dual runtime delivered: desktop + headless
+- Minimal dual runtime delivered: app host + headless
 - Core settings UI skeleton:
   - Provider settings
   - Model settings

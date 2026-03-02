@@ -14,7 +14,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: {
-      ignored: ["**/apps/desktop/**"],
+      ignored: ["**/apps/app/**"],
     },
   },
 });

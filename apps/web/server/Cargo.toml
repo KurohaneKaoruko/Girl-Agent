@@ -7,7 +7,7 @@ authors.workspace = true
 
 [dependencies]
 axum.workspace = true
-girlagent-core = { git = "ssh://git@github.com/KurohaneKaoruko/Girl-Agent-Core.git", rev = "0c7f233fcdd204b4bc77689faffe25c7973be97b" }
+girlagent-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

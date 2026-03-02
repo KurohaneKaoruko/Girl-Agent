@@ -12,6 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Configure Git auth for private core repository
+        if: ${{ secrets.GIRL_AGENT_CORE_TOKEN != '' }}
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GIRL_AGENT_CORE_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure Cargo git fetch
+        run: |
+          mkdir -p ~/.cargo
+          {
+            echo "[net]"
+            echo "git-fetch-with-cli = true"
+          } >> ~/.cargo/config.toml
       - uses: Swatinem/rust-cache@v2
       - name: Check workspace
         run: cargo check --workspace
@@ -31,4 +42,4 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
       - name: Build console
-        run: pnpm --dir GirlAgent-Web/console build
+        run: pnpm --dir apps/web/console build

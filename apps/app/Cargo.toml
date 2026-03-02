@@ -1,7 +1,7 @@
 [package]
-name = "girlagent-desktop"
+name = "girlagent-app"
 version = "0.1.0"
-description = "GirlAgent desktop backend powered by Rust and Tauri."
+description = "GirlAgent app host backend powered by Rust and Tauri."
 authors = ["GirlAgent Team"]
 edition = "2021"
 rust-version = "1.77"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-girlagent-core = { git = "ssh://git@github.com/KurohaneKaoruko/Girl-Agent-Core.git", rev = "0c7f233fcdd204b4bc77689faffe25c7973be97b" }
+girlagent-core.workspace = true
 tauri = { version = "2", features = [] }
 
 [features]
