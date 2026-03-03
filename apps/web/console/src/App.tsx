@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AgentSettings } from "@/features/agent/AgentSettings";
+import { ChatWorkspace } from "@/features/chat/ChatWorkspace";
 import { ModelSettings } from "@/features/model/ModelSettings";
 import { ProviderSettings } from "@/features/provider/ProviderSettings";
-import {
-  getApiClient,
-  getHeadlessConfig,
-  setHeadlessConfig,
-} from "@/lib/apiClient";
+import { getApiClient, getHeadlessConfig, setHeadlessConfig } from "@/lib/apiClient";
 import type {
   AgentConfig,
   ApiError,
   AppBootstrap,
-  ChatMessage,
+  ChatWithAgentRequest,
+  ChatWithAgentResponse,
   CreateAgentRequest,
   CreateModelRequest,
   CreateProviderRequest,
   ModelConfig,
   ProviderConfig,
+  RegenerateChatReplyRequest,
+  RewriteChatUserMessageRequest,
   TabKey,
+  UndoLastChatTurnRequest,
+  UndoLastChatTurnResponse,
   UpdateAgentRequest,
   UpdateModelRequest,
   UpdateProviderRequest,
@@ -27,7 +29,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "provider", label: "提供商设置" },
   { key: "model", label: "模型设置" },
   { key: "agent", label: "智能体设置" },
-  { key: "chat", label: "对话测试" },
+  { key: "chat", label: "对话聊天" },
 ];
 
 const fallbackBootstrap: AppBootstrap = {
@@ -38,6 +40,23 @@ const fallbackBootstrap: AppBootstrap = {
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const api = getApiClient();
+
+const toApiError = (error: unknown): ApiError => {
+  if (typeof error === "object" && error !== null) {
+    const payload = error as Record<string, unknown>;
+    if (typeof payload.code === "string" && typeof payload.message === "string") {
+      return {
+        code: payload.code,
+        message: payload.message,
+        details: payload.details,
+      };
+    }
+  }
+  if (error instanceof Error) {
+    return { code: "INTERNAL_ERROR", message: error.message };
+  }
+  return { code: "INTERNAL_ERROR", message: "Unknown error" };
+};
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("provider");
@@ -50,14 +69,6 @@ export function App() {
   const [error, setError] = useState<ApiError | null>(null);
   const [headlessBaseUrl, setHeadlessBaseUrl] = useState(() => getHeadlessConfig().baseUrl);
   const [headlessToken, setHeadlessToken] = useState(() => getHeadlessConfig().token);
-  const [chatAgentId, setChatAgentId] = useState("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatModelId, setChatModelId] = useState("");
-  const [chatTemperature, setChatTemperature] = useState("");
-  const [chatMaxTokens, setChatMaxTokens] = useState("");
-  const [chatTopP, setChatTopP] = useState("");
-  const [chatFrequencyPenalty, setChatFrequencyPenalty] = useState("");
 
   const withAction = useCallback(async (action: () => Promise<void>) => {
     setSaving(true);
@@ -65,7 +76,7 @@ export function App() {
       await action();
       setError(null);
     } catch (rawError) {
-      setError(rawError as ApiError);
+      setError(toApiError(rawError));
     } finally {
       setSaving(false);
     }
@@ -87,7 +98,7 @@ export function App() {
       setError(null);
     } catch (rawError) {
       setBackendStatus("未连接");
-      setError(rawError as ApiError);
+      setError(toApiError(rawError));
     }
   }, []);
 
@@ -95,11 +106,156 @@ export function App() {
     loadAll();
   }, [loadAll]);
 
-  useEffect(() => {
-    if (!chatAgentId && agents.length > 0) {
-      setChatAgentId(agents[0].id);
-    }
-  }, [agents, chatAgentId]);
+  const chatWithAgent = useCallback(
+    async (input: ChatWithAgentRequest): Promise<ChatWithAgentResponse> => {
+      try {
+        const result = await api.chatWithAgent(input);
+        setError(null);
+        return result;
+      } catch (rawError) {
+        const mapped = toApiError(rawError);
+        setError(mapped);
+        throw mapped;
+      }
+    },
+    [],
+  );
+
+  const chatWithAgentStream = useCallback(
+    async (
+      input: ChatWithAgentRequest,
+      onDelta: (chunk: string) => void,
+    ): Promise<ChatWithAgentResponse> => {
+      try {
+        const result = await api.chatWithAgentStream(input, onDelta);
+        setError(null);
+        return result;
+      } catch (rawError) {
+        const mapped = toApiError(rawError);
+        setError(mapped);
+        throw mapped;
+      }
+    },
+    [],
+  );
+
+  const regenerateChatReply = useCallback(
+    async (input: RegenerateChatReplyRequest): Promise<ChatWithAgentResponse> => {
+      try {
+        const result = await api.regenerateChatReply(input);
+        setError(null);
+        return result;
+      } catch (rawError) {
+        const mapped = toApiError(rawError);
+        setError(mapped);
+        throw mapped;
+      }
+    },
+    [],
+  );
+
+  const regenerateChatReplyStream = useCallback(
+    async (
+      input: RegenerateChatReplyRequest,
+      onDelta: (chunk: string) => void,
+    ): Promise<ChatWithAgentResponse> => {
+      try {
+        const result = await api.regenerateChatReplyStream(input, onDelta);
+        setError(null);
+        return result;
+      } catch (rawError) {
+        const mapped = toApiError(rawError);
+        setError(mapped);
+        throw mapped;
+      }
+    },
+    [],
+  );
+
+  const undoLastChatTurn = useCallback(
+    async (input: UndoLastChatTurnRequest): Promise<UndoLastChatTurnResponse> => {
+      try {
+        const result = await api.undoLastChatTurn(input);
+        setError(null);
+        return result;
+      } catch (rawError) {
+        const mapped = toApiError(rawError);
+        setError(mapped);
+        throw mapped;
+      }
+    },
+    [],
+  );
+
+  const rewriteChatUserMessage = useCallback(
+    async (input: RewriteChatUserMessageRequest): Promise<ChatWithAgentResponse> => {
+      try {
+        const result = await api.rewriteChatUserMessage(input);
+        setError(null);
+        return result;
+      } catch (rawError) {
+        const mapped = toApiError(rawError);
+        setError(mapped);
+        throw mapped;
+      }
+    },
+    [],
+  );
+
+  const listAgentChatSessions = useCallback(async (agentId: string) => {
+    return api.listAgentChatSessions(agentId);
+  }, []);
+
+  const createAgentChatSession = useCallback(async (agentId: string, title: string) => {
+    return api.createAgentChatSession(agentId, title);
+  }, []);
+
+  const renameAgentChatSession = useCallback(
+    async (agentId: string, sessionId: string, title: string) => {
+      return api.renameAgentChatSession(agentId, sessionId, title);
+    },
+    [],
+  );
+
+  const duplicateAgentChatSession = useCallback(
+    async (agentId: string, sourceSessionId: string, title: string) => {
+      return api.duplicateAgentChatSession(agentId, sourceSessionId, title);
+    },
+    [],
+  );
+
+  const setAgentChatSessionPinned = useCallback(
+    async (agentId: string, sessionId: string, pinned: boolean) => {
+      return api.setAgentChatSessionPinned(agentId, sessionId, pinned);
+    },
+    [],
+  );
+
+  const setAgentChatSessionArchived = useCallback(
+    async (agentId: string, sessionId: string, archived: boolean) => {
+      return api.setAgentChatSessionArchived(agentId, sessionId, archived);
+    },
+    [],
+  );
+
+  const setAgentChatSessionTags = useCallback(
+    async (agentId: string, sessionId: string, tags: string[]) => {
+      return api.setAgentChatSessionTags(agentId, sessionId, tags);
+    },
+    [],
+  );
+
+  const deleteAgentChatSession = useCallback(async (agentId: string, sessionId: string) => {
+    await api.deleteAgentChatSession(agentId, sessionId);
+  }, []);
+
+  const loadSessionMessages = useCallback(async (agentId: string, sessionId: string) => {
+    return api.listChatSessionMessages(agentId, sessionId);
+  }, []);
+
+  const clearSessionMessages = useCallback(async (agentId: string, sessionId: string) => {
+    await api.clearChatSessionMessages(agentId, sessionId);
+  }, []);
 
   const tabContent = useMemo(() => {
     if (activeTab === "provider") {
@@ -129,6 +285,7 @@ export function App() {
         />
       );
     }
+
     if (activeTab === "model") {
       return (
         <ModelSettings
@@ -156,203 +313,79 @@ export function App() {
         />
       );
     }
-    if (activeTab === "chat") {
+
+    if (activeTab === "agent") {
       return (
-        <section className="panel">
-          <header className="panel-header">
-            <h2>对话测试</h2>
-          </header>
-          <div className="card">
-            <label>
-              选择智能体
-              <select
-                onChange={(event) => setChatAgentId(event.target.value)}
-                value={chatAgentId}
-              >
-                {agents.length === 0 && <option value="">暂无智能体</option>}
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="chat-log">
-              {chatMessages.length === 0 && (
-                <p className="hint">发送第一条消息开始测试模型回复。</p>
-              )}
-              {chatMessages.map((item, index) => (
-                <div
-                  className={item.role === "assistant" ? "chat-bubble assistant" : "chat-bubble user"}
-                  key={`${item.role}-${index}`}
-                >
-                  <strong>{item.role === "assistant" ? "少女智能体" : "你"}</strong>
-                  <p>{item.content}</p>
-                </div>
-              ))}
-            </div>
-
-            <label>
-              输入消息
-              <textarea
-                onChange={(event) => setChatInput(event.target.value)}
-                placeholder="输入你想说的话..."
-                rows={4}
-                value={chatInput}
-              />
-            </label>
-
-            <div className="field-grid">
-              <label>
-                æœ¬æ¬¡æ¸©åº¦è¦†ç›–ï¼ˆå¯é€‰ï¼‰
-                <input
-                  max="2"
-                  min="0"
-                  onChange={(event) => setChatTemperature(event.target.value)}
-                  placeholder="ç•™ç©ºåˆ™ä½¿ç”¨æ™ºèƒ½ä½“é…ç½®"
-                  step="0.1"
-                  type="number"
-                  value={chatTemperature}
-                />
-              </label>
-              <label>
-                æœ¬æ¬¡ Max Tokens è¦†ç›–ï¼ˆå¯é€‰ï¼‰
-                <input
-                  min="1"
-                  onChange={(event) => setChatMaxTokens(event.target.value)}
-                  placeholder="ç•™ç©ºåˆ™ä½¿ç”¨æ™ºèƒ½ä½“é…ç½®"
-                  type="number"
-	                  value={chatMaxTokens}
-	                />
-	              </label>
-	              <label>
-	                Top P Override
-	                <input
-	                  max="1"
-	                  min="0"
-	                  onChange={(event) => setChatTopP(event.target.value)}
-	                  placeholder="Leave empty to use agent/model setting"
-	                  step="0.05"
-	                  type="number"
-	                  value={chatTopP}
-	                />
-	              </label>
-	              <label>
-	                Frequency Penalty Override
-	                <input
-	                  max="2"
-	                  min="-2"
-	                  onChange={(event) => setChatFrequencyPenalty(event.target.value)}
-	                  placeholder="Leave empty to use agent/model setting"
-	                  step="0.1"
-	                  type="number"
-	                  value={chatFrequencyPenalty}
-	                />
-	              </label>
-	            </div>
-
-            <div className="actions">
-              <button
-                className="primary"
-                disabled={saving || !chatAgentId || !chatInput.trim()}
-                onClick={() =>
-                  withAction(async () => {
-                    const userMessage = chatInput.trim();
-                    const history = [...chatMessages];
-                    const parsedTemperature = chatTemperature.trim()
-                      ? Number(chatTemperature)
-                      : null;
-                    const parsedMaxTokens = chatMaxTokens.trim() ? Number(chatMaxTokens) : null;
-                    const parsedTopP = chatTopP.trim() ? Number(chatTopP) : null;
-                    const parsedFrequencyPenalty = chatFrequencyPenalty.trim()
-                      ? Number(chatFrequencyPenalty)
-                      : null;
-                    const result = await api.chatWithAgent({
-                      agentId: chatAgentId,
-                      userMessage,
-                      history,
-                      temperature: Number.isFinite(parsedTemperature) ? parsedTemperature : null,
-                      maxTokens: Number.isFinite(parsedMaxTokens) ? parsedMaxTokens : null,
-                      topP: Number.isFinite(parsedTopP) ? parsedTopP : null,
-                      frequencyPenalty: Number.isFinite(parsedFrequencyPenalty)
-                        ? parsedFrequencyPenalty
-                        : null,
-                    });
-
-                    setChatMessages((previous) => [
-                      ...previous,
-                      { role: "user", content: userMessage },
-                      { role: "assistant", content: result.message },
-                    ]);
-                    setChatInput("");
-                    setChatModelId(result.modelId);
-                  })
-                }
-                type="button"
-              >
-                发送
-              </button>
-              <button
-                className="ghost"
-                onClick={() => {
-                  setChatMessages([]);
-                  setChatModelId("");
-                  setChatTemperature("");
-                  setChatMaxTokens("");
-                  setChatTopP("");
-                  setChatFrequencyPenalty("");
-                }}
-                type="button"
-              >
-                清空会话
-              </button>
-            </div>
-
-            {chatModelId && <small className="hint">最近回复模型：{chatModelId}</small>}
-          </div>
-        </section>
+        <AgentSettings
+          agents={agents}
+          models={models}
+          onCreate={(input: CreateAgentRequest) =>
+            withAction(async () => {
+              await api.createAgent(input);
+              setAgents(await api.listAgents());
+            })
+          }
+          onDelete={(id: string) =>
+            withAction(async () => {
+              await api.deleteAgent(id);
+              setAgents(await api.listAgents());
+            })
+          }
+          onUpdate={(id: string, input: UpdateAgentRequest) =>
+            withAction(async () => {
+              await api.updateAgent(id, input);
+              setAgents(await api.listAgents());
+            })
+          }
+          saving={saving}
+        />
       );
     }
+
     return (
-      <AgentSettings
+      <ChatWorkspace
         agents={agents}
-        models={models}
-        onCreate={(input: CreateAgentRequest) =>
-          withAction(async () => {
-            await api.createAgent(input);
-            setAgents(await api.listAgents());
-          })
-        }
-        onDelete={(id: string) =>
-          withAction(async () => {
-            await api.deleteAgent(id);
-            setAgents(await api.listAgents());
-          })
-        }
-        onUpdate={(id: string, input: UpdateAgentRequest) =>
-          withAction(async () => {
-            await api.updateAgent(id, input);
-            setAgents(await api.listAgents());
-          })
-        }
-        saving={saving}
+        disabled={saving}
+        onChat={chatWithAgent}
+        onChatStream={chatWithAgentStream}
+        onRegenerate={regenerateChatReply}
+        onRegenerateStream={regenerateChatReplyStream}
+        onUndoLastTurn={undoLastChatTurn}
+        onRewriteUserMessage={rewriteChatUserMessage}
+        onListSessions={listAgentChatSessions}
+        onCreateSession={createAgentChatSession}
+        onRenameSession={renameAgentChatSession}
+        onDuplicateSession={duplicateAgentChatSession}
+        onSetSessionPinned={setAgentChatSessionPinned}
+        onSetSessionArchived={setAgentChatSessionArchived}
+        onSetSessionTags={setAgentChatSessionTags}
+        onDeleteSession={deleteAgentChatSession}
+        onLoadSessionMessages={loadSessionMessages}
+        onClearSessionMessages={clearSessionMessages}
       />
     );
   }, [
     activeTab,
     agents,
     bootstrap.providerPresets,
-    chatAgentId,
-    chatInput,
-    chatMessages,
-    chatModelId,
-    chatMaxTokens,
-    chatFrequencyPenalty,
-    chatTopP,
-    chatTemperature,
+    chatWithAgent,
+    chatWithAgentStream,
+    regenerateChatReply,
+    regenerateChatReplyStream,
+    undoLastChatTurn,
+    rewriteChatUserMessage,
+    clearSessionMessages,
+    createAgentChatSession,
+    duplicateAgentChatSession,
+    deleteAgentChatSession,
+    listAgentChatSessions,
+    loadSessionMessages,
     models,
     providers,
+    renameAgentChatSession,
+    setAgentChatSessionArchived,
+    setAgentChatSessionPinned,
+    setAgentChatSessionTags,
     saving,
     withAction,
   ]);
@@ -414,6 +447,7 @@ export function App() {
               className={tab.key === activeTab ? "tab active" : "tab"}
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
+              type="button"
             >
               {tab.label}
             </button>

@@ -154,6 +154,7 @@ export type ChatMessage = {
 
 export type ChatWithAgentRequest = {
   agentId: string;
+  sessionId: string | null;
   userMessage: string;
   history: ChatMessage[];
   temperature: number | null;
@@ -162,11 +163,69 @@ export type ChatWithAgentRequest = {
   frequencyPenalty: number | null;
 };
 
+export type RegenerateChatReplyRequest = {
+  agentId: string;
+  sessionId: string | null;
+  replaceLastAssistant: boolean;
+  temperature: number | null;
+  maxTokens: number | null;
+  topP: number | null;
+  frequencyPenalty: number | null;
+};
+
+export type UndoLastChatTurnRequest = {
+  agentId: string;
+  sessionId: string | null;
+};
+
+export type RewriteLastUserMessageRequest = {
+  agentId: string;
+  sessionId: string | null;
+  userMessage: string;
+  temperature: number | null;
+  maxTokens: number | null;
+  topP: number | null;
+  frequencyPenalty: number | null;
+};
+
+export type RewriteChatUserMessageRequest = {
+  agentId: string;
+  sessionId: string | null;
+  targetUserOffset: number;
+  userMessage: string;
+  temperature: number | null;
+  maxTokens: number | null;
+  topP: number | null;
+  frequencyPenalty: number | null;
+};
+
 export type ChatWithAgentResponse = {
   agentId: string;
+  sessionId: string;
   modelRefId: string;
   modelId: string;
   message: string;
+};
+
+export type UndoLastChatTurnResponse = {
+  agentId: string;
+  sessionId: string;
+  removedCount: number;
+};
+
+export type ChatSession = {
+  id: string;
+  agentId: string;
+  title: string;
+  isDefault: boolean;
+  isPinned: boolean;
+  isArchived: boolean;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessageRole: ChatMessageRole | null;
+  lastMessagePreview: string | null;
 };
 
 export type TabKey = "provider" | "model" | "agent" | "chat";
