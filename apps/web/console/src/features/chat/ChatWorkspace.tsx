@@ -63,6 +63,8 @@ type AgentChatWindow = {
   loadingMessages: boolean;
   clearing: boolean;
   exportingAll: boolean;
+  highlightedMessageIndexes: number[];
+  highlightToken: number;
   error: ApiError | null;
 };
 
@@ -116,6 +118,8 @@ const createEmptyWindow = (preference?: WindowPreference): AgentChatWindow => ({
   loadingMessages: false,
   clearing: false,
   exportingAll: false,
+  highlightedMessageIndexes: [],
+  highlightToken: 0,
   error: null,
 });
 
@@ -207,6 +211,58 @@ export function ChatWorkspace({
     });
   };
 
+  const collectRewriteHighlightIndexes = (messages: ChatMessage[], targetUserOffset: number): number[] => {
+    const userIndexes = messages
+      .map((message, index) => (message.role === "user" ? index : -1))
+      .filter((index) => index >= 0);
+    const targetPosition = userIndexes.length - 1 - targetUserOffset;
+    if (targetPosition < 0 || targetPosition >= userIndexes.length) {
+      return [];
+    }
+    const targetUserIndex = userIndexes[targetPosition];
+    let targetAssistantIndex = -1;
+    for (let index = targetUserIndex + 1; index < messages.length; index += 1) {
+      if (messages[index].role === "assistant") {
+        targetAssistantIndex = index;
+        break;
+      }
+      if (messages[index].role === "user") {
+        break;
+      }
+    }
+    return targetAssistantIndex >= 0 ? [targetUserIndex, targetAssistantIndex] : [targetUserIndex];
+  };
+
+  const scheduleMessageHighlight = (agentId: string, indexes: number[]) => {
+    const deduped = [...new Set(indexes.filter((index) => index >= 0))];
+    if (deduped.length === 0) {
+      return;
+    }
+    const token = Date.now() + Math.random();
+    updateWindow(agentId, {
+      highlightedMessageIndexes: deduped,
+      highlightToken: token,
+    });
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.setTimeout(() => {
+      setWindows((current) => {
+        const state = current[agentId];
+        if (!state || state.highlightToken !== token) {
+          return current;
+        }
+        return {
+          ...current,
+          [agentId]: {
+            ...state,
+            highlightedMessageIndexes: [],
+          },
+        };
+      });
+    }, 3200);
+  };
+
   useEffect(() => {
     windowsRef.current = windows;
   }, [windows]);
@@ -243,27 +299,29 @@ export function ChatWorkspace({
     }
   }, [agents, windows]);
 
-  const loadMessages = async (agentId: string, sessionId: string) => {
+  const loadMessages = async (agentId: string, sessionId: string): Promise<ChatMessage[] | null> => {
     messageLoadRef.current[agentId] = sessionId;
     updateWindow(agentId, { loadingMessages: true, error: null });
     try {
       const messages = await onLoadSessionMessages(agentId, sessionId);
       if (messageLoadRef.current[agentId] !== sessionId) {
-        return;
+        return null;
       }
       updateWindow(agentId, {
         messages,
         selectedSessionId: sessionId,
         loadingMessages: false,
       });
+      return messages;
     } catch (rawError) {
       if (messageLoadRef.current[agentId] !== sessionId) {
-        return;
+        return null;
       }
       updateWindow(agentId, {
         loadingMessages: false,
         error: toApiError(rawError),
       });
+      return null;
     }
   };
 
@@ -772,7 +830,13 @@ export function ChatWorkspace({
         lastModelId: result.modelId,
         selectedSessionId: result.sessionId,
       });
-      await loadMessages(agent.id, result.sessionId);
+      const refreshedMessages = await loadMessages(agent.id, result.sessionId);
+      if (refreshedMessages) {
+        scheduleMessageHighlight(
+          agent.id,
+          collectRewriteHighlightIndexes(refreshedMessages, targetUserOffset),
+        );
+      }
       void loadSessions(agent.id, result.sessionId);
     } catch (rawError) {
       updateWindow(agent.id, { rewriting: false, error: toApiError(rawError) });
@@ -1134,7 +1198,15 @@ export function ChatWorkspace({
                     )}
                     {state.messages.map((item, index) => (
                       <div
-                        className={item.role === "assistant" ? "chat-bubble assistant" : "chat-bubble user"}
+                        className={
+                          [
+                            "chat-bubble",
+                            item.role === "assistant" ? "assistant" : "user",
+                            state.highlightedMessageIndexes.includes(index) ? "highlight" : "",
+                          ]
+                            .filter((value) => value.length > 0)
+                            .join(" ")
+                        }
                         key={`${agent.id}-${item.role}-${index}`}
                       >
                         <div className="chat-bubble-head">
