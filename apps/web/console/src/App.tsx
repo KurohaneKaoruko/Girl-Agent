@@ -54,6 +54,10 @@ export function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatModelId, setChatModelId] = useState("");
+  const [chatTemperature, setChatTemperature] = useState("");
+  const [chatMaxTokens, setChatMaxTokens] = useState("");
+  const [chatTopP, setChatTopP] = useState("");
+  const [chatFrequencyPenalty, setChatFrequencyPenalty] = useState("");
 
   const withAction = useCallback(async (action: () => Promise<void>) => {
     setSaving(true);
@@ -199,6 +203,55 @@ export function App() {
               />
             </label>
 
+            <div className="field-grid">
+              <label>
+                æœ¬æ¬¡æ¸©åº¦è¦†ç›–ï¼ˆå¯é€‰ï¼‰
+                <input
+                  max="2"
+                  min="0"
+                  onChange={(event) => setChatTemperature(event.target.value)}
+                  placeholder="ç•™ç©ºåˆ™ä½¿ç”¨æ™ºèƒ½ä½“é…ç½®"
+                  step="0.1"
+                  type="number"
+                  value={chatTemperature}
+                />
+              </label>
+              <label>
+                æœ¬æ¬¡ Max Tokens è¦†ç›–ï¼ˆå¯é€‰ï¼‰
+                <input
+                  min="1"
+                  onChange={(event) => setChatMaxTokens(event.target.value)}
+                  placeholder="ç•™ç©ºåˆ™ä½¿ç”¨æ™ºèƒ½ä½“é…ç½®"
+                  type="number"
+	                  value={chatMaxTokens}
+	                />
+	              </label>
+	              <label>
+	                Top P Override
+	                <input
+	                  max="1"
+	                  min="0"
+	                  onChange={(event) => setChatTopP(event.target.value)}
+	                  placeholder="Leave empty to use agent/model setting"
+	                  step="0.05"
+	                  type="number"
+	                  value={chatTopP}
+	                />
+	              </label>
+	              <label>
+	                Frequency Penalty Override
+	                <input
+	                  max="2"
+	                  min="-2"
+	                  onChange={(event) => setChatFrequencyPenalty(event.target.value)}
+	                  placeholder="Leave empty to use agent/model setting"
+	                  step="0.1"
+	                  type="number"
+	                  value={chatFrequencyPenalty}
+	                />
+	              </label>
+	            </div>
+
             <div className="actions">
               <button
                 className="primary"
@@ -207,12 +260,24 @@ export function App() {
                   withAction(async () => {
                     const userMessage = chatInput.trim();
                     const history = [...chatMessages];
+                    const parsedTemperature = chatTemperature.trim()
+                      ? Number(chatTemperature)
+                      : null;
+                    const parsedMaxTokens = chatMaxTokens.trim() ? Number(chatMaxTokens) : null;
+                    const parsedTopP = chatTopP.trim() ? Number(chatTopP) : null;
+                    const parsedFrequencyPenalty = chatFrequencyPenalty.trim()
+                      ? Number(chatFrequencyPenalty)
+                      : null;
                     const result = await api.chatWithAgent({
                       agentId: chatAgentId,
                       userMessage,
                       history,
-                      temperature: null,
-                      maxTokens: null,
+                      temperature: Number.isFinite(parsedTemperature) ? parsedTemperature : null,
+                      maxTokens: Number.isFinite(parsedMaxTokens) ? parsedMaxTokens : null,
+                      topP: Number.isFinite(parsedTopP) ? parsedTopP : null,
+                      frequencyPenalty: Number.isFinite(parsedFrequencyPenalty)
+                        ? parsedFrequencyPenalty
+                        : null,
                     });
 
                     setChatMessages((previous) => [
@@ -233,6 +298,10 @@ export function App() {
                 onClick={() => {
                   setChatMessages([]);
                   setChatModelId("");
+                  setChatTemperature("");
+                  setChatMaxTokens("");
+                  setChatTopP("");
+                  setChatFrequencyPenalty("");
                 }}
                 type="button"
               >
@@ -278,6 +347,10 @@ export function App() {
     chatInput,
     chatMessages,
     chatModelId,
+    chatMaxTokens,
+    chatFrequencyPenalty,
+    chatTopP,
+    chatTemperature,
     models,
     providers,
     saving,

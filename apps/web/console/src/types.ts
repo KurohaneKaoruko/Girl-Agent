@@ -91,6 +91,31 @@ export type DecisionSlot = {
   enabled: boolean;
 };
 
+export type SlotParams = {
+  temperature: number | null;
+  maxTokens: number | null;
+  topP: number | null;
+  frequencyPenalty: number | null;
+};
+
+export type ComponentParamSlot = {
+  asr: SlotParams;
+  tts: SlotParams;
+  vision: SlotParams;
+};
+
+export type ToolParamSlot = {
+  planner: SlotParams;
+  executor: SlotParams;
+};
+
+export type AgentParamSlots = {
+  component: ComponentParamSlot;
+  tool: ToolParamSlot;
+  reply: SlotParams;
+  decision: SlotParams;
+};
+
 export type AgentConfig = {
   id: string;
   name: string;
@@ -103,6 +128,7 @@ export type AgentConfig = {
     reply: { modelId: string };
     decision: DecisionSlot;
   };
+  paramSlots: AgentParamSlots;
 };
 
 export type CreateAgentRequest = {
@@ -114,6 +140,7 @@ export type CreateAgentRequest = {
   toolSlot: ToolSlot;
   replyModelId: string;
   decisionSlot: DecisionSlot;
+  paramSlots: AgentParamSlots;
 };
 
 export type UpdateAgentRequest = CreateAgentRequest;
@@ -131,6 +158,8 @@ export type ChatWithAgentRequest = {
   history: ChatMessage[];
   temperature: number | null;
   maxTokens: number | null;
+  topP: number | null;
+  frequencyPenalty: number | null;
 };
 
 export type ChatWithAgentResponse = {

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use girlagent_core::{
-    AppService, AppResult, ChatWithAgentRequest, ChatWithAgentResponse, CreateAgentRequest,
+    AppResult, AppService, ChatWithAgentRequest, ChatWithAgentResponse, CreateAgentRequest,
     CreateModelRequest, CreateProviderRequest, ErrorPayload, OpenAICompatChatGateway, SqliteStore,
     UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
 };
@@ -29,12 +29,16 @@ fn ping(message: String) -> String {
 }
 
 #[tauri::command]
-async fn get_bootstrap_data(state: State<'_, AppState>) -> CommandResult<girlagent_core::BootstrapResponse> {
+async fn get_bootstrap_data(
+    state: State<'_, AppState>,
+) -> CommandResult<girlagent_core::BootstrapResponse> {
     map_command_result(state.service.bootstrap().await)
 }
 
 #[tauri::command]
-async fn list_providers(state: State<'_, AppState>) -> CommandResult<Vec<girlagent_core::ProviderConfig>> {
+async fn list_providers(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<girlagent_core::ProviderConfig>> {
     map_command_result(state.service.list_providers().await)
 }
 
@@ -61,7 +65,9 @@ async fn delete_provider(state: State<'_, AppState>, id: String) -> CommandResul
 }
 
 #[tauri::command]
-async fn list_models(state: State<'_, AppState>) -> CommandResult<Vec<girlagent_core::ModelConfig>> {
+async fn list_models(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<girlagent_core::ModelConfig>> {
     map_command_result(state.service.list_models().await)
 }
 
@@ -88,7 +94,9 @@ async fn delete_model(state: State<'_, AppState>, id: String) -> CommandResult<(
 }
 
 #[tauri::command]
-async fn list_agents(state: State<'_, AppState>) -> CommandResult<Vec<girlagent_core::AgentConfig>> {
+async fn list_agents(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<girlagent_core::AgentConfig>> {
     map_command_result(state.service.list_agents().await)
 }
 
@@ -119,7 +127,12 @@ async fn chat_with_agent(
     state: State<'_, AppState>,
     input: ChatWithAgentRequest,
 ) -> CommandResult<ChatWithAgentResponse> {
-    map_command_result(state.service.chat_with_agent(&state.chat_gateway, input).await)
+    map_command_result(
+        state
+            .service
+            .chat_with_agent(&state.chat_gateway, input)
+            .await,
+    )
 }
 
 pub fn run() {

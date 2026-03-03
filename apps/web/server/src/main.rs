@@ -30,7 +30,8 @@ type ApiResponse<T> = Result<Json<T>, (StatusCode, Json<ErrorPayload>)>;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_url =
         std::env::var("GIRLAGENT_DB_URL").unwrap_or_else(|_| "sqlite://girlagent.db".to_string());
-    let bind_addr = std::env::var("GIRLAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
+    let bind_addr =
+        std::env::var("GIRLAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
     let token = std::env::var("GIRLAGENT_TOKEN").unwrap_or_else(|_| {
         let generated = Uuid::new_v4().to_string();
         eprintln!("GIRLAGENT_TOKEN not set, generated one-time token: {generated}");
@@ -112,16 +113,15 @@ fn map_error(error: AppError) -> (StatusCode, Json<ErrorPayload>) {
     (status, Json(payload))
 }
 
-async fn get_bootstrap(State(state): State<AppState>) -> ApiResponse<girlagent_core::BootstrapResponse> {
-    state
-        .service
-        .bootstrap()
-        .await
-        .map(Json)
-        .map_err(map_error)
+async fn get_bootstrap(
+    State(state): State<AppState>,
+) -> ApiResponse<girlagent_core::BootstrapResponse> {
+    state.service.bootstrap().await.map(Json).map_err(map_error)
 }
 
-async fn list_providers(State(state): State<AppState>) -> ApiResponse<Vec<girlagent_core::ProviderConfig>> {
+async fn list_providers(
+    State(state): State<AppState>,
+) -> ApiResponse<Vec<girlagent_core::ProviderConfig>> {
     state
         .service
         .list_providers()
@@ -167,8 +167,15 @@ async fn delete_provider(
         .map_err(map_error)
 }
 
-async fn list_models(State(state): State<AppState>) -> ApiResponse<Vec<girlagent_core::ModelConfig>> {
-    state.service.list_models().await.map(Json).map_err(map_error)
+async fn list_models(
+    State(state): State<AppState>,
+) -> ApiResponse<Vec<girlagent_core::ModelConfig>> {
+    state
+        .service
+        .list_models()
+        .await
+        .map(Json)
+        .map_err(map_error)
 }
 
 async fn create_model(
@@ -208,8 +215,15 @@ async fn delete_model(
         .map_err(map_error)
 }
 
-async fn list_agents(State(state): State<AppState>) -> ApiResponse<Vec<girlagent_core::AgentConfig>> {
-    state.service.list_agents().await.map(Json).map_err(map_error)
+async fn list_agents(
+    State(state): State<AppState>,
+) -> ApiResponse<Vec<girlagent_core::AgentConfig>> {
+    state
+        .service
+        .list_agents()
+        .await
+        .map(Json)
+        .map_err(map_error)
 }
 
 async fn create_agent(

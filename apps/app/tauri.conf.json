@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.girlagent.app",
   "build": {
-    "beforeDevCommand": "pnpm --dir ../web/console dev",
-    "beforeBuildCommand": "pnpm --dir ../web/console build",
+    "beforeDevCommand": "pnpm --dir apps/web/console dev",
+    "beforeBuildCommand": "pnpm --dir apps/web/console build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../web/console/dist"
   },
