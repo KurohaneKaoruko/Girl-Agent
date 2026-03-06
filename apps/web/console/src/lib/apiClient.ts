@@ -7,9 +7,12 @@ import type {
   ChatSession,
   ChatWithAgentRequest,
   ChatWithAgentResponse,
+  ChatWithSessionRequest,
+  ChatWithSessionResponse,
   CreateAgentRequest,
   CreateModelRequest,
   CreateProviderRequest,
+  CreateWorkspaceChatSessionRequest,
   ModelConfig,
   ProbeModelConnectionRequest,
   ProbeModelConnectionResponse,
@@ -25,6 +28,10 @@ import type {
   UpdateAgentRequest,
   UpdateModelRequest,
   UpdateProviderRequest,
+  UpdateWorkspaceChatSessionRequest,
+  WorkspaceChatMessage,
+  WorkspaceChatReply,
+  WorkspaceChatSession,
 } from "@/types";
 
 export type ApiClient = {
@@ -46,6 +53,22 @@ export type ApiClient = {
   createAgent(input: CreateAgentRequest): Promise<AgentConfig>;
   updateAgent(id: string, input: UpdateAgentRequest): Promise<AgentConfig>;
   deleteAgent(id: string): Promise<void>;
+  listWorkspaceChatSessions(): Promise<WorkspaceChatSession[]>;
+  createWorkspaceChatSession(input: CreateWorkspaceChatSessionRequest): Promise<WorkspaceChatSession>;
+  updateWorkspaceChatSession(
+    sessionId: string,
+    input: UpdateWorkspaceChatSessionRequest,
+  ): Promise<WorkspaceChatSession>;
+  deleteWorkspaceChatSession(sessionId: string): Promise<void>;
+  listWorkspaceChatMessages(sessionId: string): Promise<WorkspaceChatMessage[]>;
+  clearWorkspaceChatMessages(sessionId: string): Promise<void>;
+  chatWithSession(input: ChatWithSessionRequest): Promise<ChatWithSessionResponse>;
+  chatWithSessionStream(
+    input: ChatWithSessionRequest,
+    onReplyStart: (reply: Omit<WorkspaceChatReply, "message">) => void,
+    onDelta: (agentId: string, chunk: string) => void,
+    signal?: AbortSignal,
+  ): Promise<ChatWithSessionResponse>;
   chatWithAgent(input: ChatWithAgentRequest): Promise<ChatWithAgentResponse>;
   chatWithAgentStream(
     input: ChatWithAgentRequest,
@@ -165,6 +188,60 @@ function mapError(raw: unknown): ApiError {
   };
 }
 
+function createHttpError(status: number, path: string): ApiError {
+  switch (status) {
+    case 400:
+      return {
+        code: "BAD_REQUEST",
+        message: "请求参数不正确，请检查后重试。",
+        details: { status, path },
+      };
+    case 401:
+      return {
+        code: "UNAUTHORIZED",
+        message: "登录已失效或访问令牌无效，请重新登录。",
+        details: { status, path },
+      };
+    case 403:
+      return {
+        code: "FORBIDDEN",
+        message: "当前没有权限执行这个操作。",
+        details: { status, path },
+      };
+    case 404:
+      return {
+        code: "NOT_FOUND",
+        message: "请求的接口不存在，请确认后端服务地址和版本是否匹配。",
+        details: { status, path },
+      };
+    case 409:
+      return {
+        code: "CONFLICT",
+        message: "当前资源状态冲突，请刷新数据后再试。",
+        details: { status, path },
+      };
+    case 422:
+      return {
+        code: "VALIDATION_ERROR",
+        message: "提交的数据未通过校验，请检查填写内容。",
+        details: { status, path },
+      };
+    default:
+      if (status >= 500) {
+        return {
+          code: "SERVER_ERROR",
+          message: "后端服务暂时不可用，请稍后重试。",
+          details: { status, path },
+        };
+      }
+      return {
+        code: "HTTP_ERROR",
+        message: `请求失败（HTTP ${status}）`,
+        details: { status, path },
+      };
+  }
+}
+
 function parseSsePacket(packet: string): { event: string; data: string } | null {
   const lines = packet
     .split(/\r?\n/)
@@ -209,6 +286,28 @@ function readSsePacket(buffered: string): { packet: string; rest: string } | nul
     packet: buffered.slice(0, lfSeparatorIndex),
     rest: buffered.slice(lfSeparatorIndex + 2),
   };
+}
+
+function splitTextChunks(text: string, chunkSize: number): string[] {
+  if (!text || chunkSize <= 0) {
+    return [];
+  }
+  const chunks: string[] = [];
+  let current = "";
+  let currentLength = 0;
+  for (const ch of text) {
+    current += ch;
+    currentLength += 1;
+    if (currentLength >= chunkSize) {
+      chunks.push(current);
+      current = "";
+      currentLength = 0;
+    }
+  }
+  if (current) {
+    chunks.push(current);
+  }
+  return chunks;
 }
 
 async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -282,6 +381,77 @@ class DesktopClient implements ApiClient {
 
   deleteAgent(id: string) {
     return invokeCommand<void>("delete_agent", { id });
+  }
+
+  listWorkspaceChatSessions() {
+    return invokeCommand<WorkspaceChatSession[]>("list_workspace_chat_sessions");
+  }
+
+  createWorkspaceChatSession(input: CreateWorkspaceChatSessionRequest) {
+    return invokeCommand<WorkspaceChatSession>("create_workspace_chat_session", { input });
+  }
+
+  updateWorkspaceChatSession(sessionId: string, input: UpdateWorkspaceChatSessionRequest) {
+    return invokeCommand<WorkspaceChatSession>("update_workspace_chat_session", {
+      sessionId,
+      input,
+    });
+  }
+
+  deleteWorkspaceChatSession(sessionId: string) {
+    return invokeCommand<void>("delete_workspace_chat_session", { sessionId });
+  }
+
+  listWorkspaceChatMessages(sessionId: string) {
+    return invokeCommand<WorkspaceChatMessage[]>("list_workspace_chat_messages", { sessionId });
+  }
+
+  clearWorkspaceChatMessages(sessionId: string) {
+    return invokeCommand<void>("clear_workspace_chat_messages", { sessionId });
+  }
+
+  chatWithSession(input: ChatWithSessionRequest) {
+    return invokeCommand<ChatWithSessionResponse>("chat_with_session", { input });
+  }
+
+  async chatWithSessionStream(
+    input: ChatWithSessionRequest,
+    onReplyStart: (reply: Omit<WorkspaceChatReply, "message">) => void,
+    onDelta: (agentId: string, chunk: string) => void,
+    signal?: AbortSignal,
+  ) {
+    if (signal?.aborted) {
+      throw {
+        code: "STREAM_ABORTED",
+        message: "已停止生成",
+      } satisfies ApiError;
+    }
+    const result = await this.chatWithSession(input);
+    for (const reply of result.replies) {
+      if (signal?.aborted) {
+        throw {
+          code: "STREAM_ABORTED",
+          message: "已停止生成",
+        } satisfies ApiError;
+      }
+      onReplyStart({
+        agentId: reply.agentId,
+        agentName: reply.agentName,
+        modelRefId: reply.modelRefId,
+        modelId: reply.modelId,
+      });
+      for (const chunk of splitTextChunks(reply.message, 24)) {
+        if (signal?.aborted) {
+          throw {
+            code: "STREAM_ABORTED",
+            message: "已停止生成",
+          } satisfies ApiError;
+        }
+        onDelta(reply.agentId, chunk);
+        await new Promise((resolve) => window.setTimeout(resolve, 8));
+      }
+    }
+    return result;
   }
 
   chatWithAgent(input: ChatWithAgentRequest) {
@@ -444,12 +614,7 @@ class HeadlessClient implements ApiClient {
       } catch {
         payload = undefined;
       }
-      throw (
-        payload ?? {
-          code: "HTTP_ERROR",
-          message: `HTTP ${response.status}`,
-        }
-      );
+      throw (payload ?? createHttpError(response.status, "/api/workspace/chat/stream"));
     }
 
     if (response.status === 204) {
@@ -547,6 +712,152 @@ class HeadlessClient implements ApiClient {
     return this.request<void>(`/api/agents/${id}`, { method: "DELETE" });
   }
 
+  listWorkspaceChatSessions() {
+    return this.request<WorkspaceChatSession[]>("/api/workspace/sessions");
+  }
+
+  createWorkspaceChatSession(input: CreateWorkspaceChatSessionRequest) {
+    return this.request<WorkspaceChatSession>("/api/workspace/sessions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateWorkspaceChatSession(sessionId: string, input: UpdateWorkspaceChatSessionRequest) {
+    return this.request<WorkspaceChatSession>(`/api/workspace/sessions/${sessionId}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteWorkspaceChatSession(sessionId: string) {
+    return this.request<void>(`/api/workspace/sessions/${sessionId}`, { method: "DELETE" });
+  }
+
+  listWorkspaceChatMessages(sessionId: string) {
+    return this.request<WorkspaceChatMessage[]>(`/api/workspace/sessions/${sessionId}/messages`);
+  }
+
+  clearWorkspaceChatMessages(sessionId: string) {
+    return this.request<void>(`/api/workspace/sessions/${sessionId}/messages`, {
+      method: "DELETE",
+    });
+  }
+
+  chatWithSession(input: ChatWithSessionRequest) {
+    return this.request<ChatWithSessionResponse>("/api/workspace/chat", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  private async streamWorkspaceChatResponse(
+    input: ChatWithSessionRequest,
+    onReplyStart: (reply: Omit<WorkspaceChatReply, "message">) => void,
+    onDelta: (agentId: string, chunk: string) => void,
+    signal?: AbortSignal,
+  ) {
+    const { baseUrl, token } = getHeadlessConfig();
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    headers.set("Accept", "text/event-stream");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/api/workspace/chat/stream`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(input),
+        signal,
+      });
+    } catch (error) {
+      if (isAbortLikeError(error) || signal?.aborted) {
+        throw {
+          code: "STREAM_ABORTED",
+          message: "已停止生成",
+        } satisfies ApiError;
+      }
+      throw mapError(error);
+    }
+
+    if (!response.ok) {
+      let payload: ApiError | undefined;
+      try {
+        payload = (await response.json()) as ApiError;
+      } catch {
+        payload = undefined;
+      }
+      throw (payload ?? createHttpError(response.status, "/api/workspace/chat/stream"));
+    }
+
+    if (!response.body) {
+      throw {
+        code: "STREAM_ERROR",
+        message: "response body is empty",
+      } satisfies ApiError;
+    }
+
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let buffered = "";
+    let finalResponse: ChatWithSessionResponse | null = null;
+
+    const processPacket = (packet: string) => {
+      const parsed = parseSsePacket(packet);
+      if (!parsed) return;
+      if (parsed.event === "reply_start") {
+        onReplyStart(JSON.parse(parsed.data) as Omit<WorkspaceChatReply, "message">);
+        return;
+      }
+      if (parsed.event === "delta") {
+        const payload = JSON.parse(parsed.data) as { agentId: string; text?: string };
+        if (payload.text) {
+          onDelta(payload.agentId, payload.text);
+        }
+        return;
+      }
+      if (parsed.event === "done") {
+        finalResponse = JSON.parse(parsed.data) as ChatWithSessionResponse;
+      }
+    };
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        while (true) {
+          const readResult = readSsePacket(buffered);
+          if (!readResult) break;
+          buffered = readResult.rest;
+          processPacket(readResult.packet);
+        }
+      }
+    } catch (error) {
+      if (isAbortLikeError(error) || signal?.aborted) {
+        throw {
+          code: "STREAM_ABORTED",
+          message: "已停止生成",
+        } satisfies ApiError;
+      }
+      throw mapError(error);
+    }
+
+    if (buffered.trim()) {
+      processPacket(buffered.trim());
+    }
+    if (!finalResponse) {
+      throw {
+        code: "STREAM_ERROR",
+        message: "stream ended without done event",
+      } satisfies ApiError;
+    }
+    return finalResponse;
+  }
+
   chatWithAgent(input: ChatWithAgentRequest) {
     return this.request<ChatWithAgentResponse>("/api/chat", {
       method: "POST",
@@ -621,12 +932,7 @@ class HeadlessClient implements ApiClient {
       } catch {
         payload = undefined;
       }
-      throw (
-        payload ?? {
-          code: "HTTP_ERROR",
-          message: `HTTP ${response.status}`,
-        }
-      );
+      throw (payload ?? createHttpError(response.status, "/api/workspace/chat/stream"));
     }
 
     if (!response.body) {
@@ -712,6 +1018,15 @@ class HeadlessClient implements ApiClient {
     signal?: AbortSignal,
   ) {
     return this.streamChatResponse("/api/chat/stream", input, onDelta, signal);
+  }
+
+  async chatWithSessionStream(
+    input: ChatWithSessionRequest,
+    onReplyStart: (reply: Omit<WorkspaceChatReply, "message">) => void,
+    onDelta: (agentId: string, chunk: string) => void,
+    signal?: AbortSignal,
+  ) {
+    return this.streamWorkspaceChatResponse(input, onReplyStart, onDelta, signal);
   }
 
   async regenerateChatReplyStream(

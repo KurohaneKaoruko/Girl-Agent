@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { ActionIconButton } from "@/components/ActionIconButton";
+import { FormModal } from "@/components/FormModal";
 import type {
   AgentConfig,
   AgentMode,
   AgentParamSlots,
   CreateAgentRequest,
+  ModelCategory,
   ModelConfig,
   SlotParams,
   UpdateAgentRequest,
@@ -54,6 +57,12 @@ const toUpdateAgent = (agent: AgentConfig): UpdateAgentRequest => ({
 
 const hasMode = (modes: string[], target: string) =>
   modes.some((mode) => mode.trim().toLowerCase() === target.toLowerCase());
+const modelHasCategory = (model: ModelConfig, category: ModelCategory) =>
+  (
+    Array.isArray(model.categories) && model.categories.length > 0
+      ? model.categories
+      : [model.category]
+  ).includes(category);
 
 const emptySlotParams = (): SlotParams => ({
   temperature: null,
@@ -210,6 +219,7 @@ function AgentForm({
   decisionModels,
   value,
   onChange,
+  showTitle = true,
 }: {
   title: string;
   replyModels: ModelConfig[];
@@ -220,10 +230,11 @@ function AgentForm({
   decisionModels: ModelConfig[];
   value: CreateAgentRequest | UpdateAgentRequest;
   onChange: (value: CreateAgentRequest | UpdateAgentRequest) => void;
+  showTitle?: boolean;
 }) {
   return (
     <>
-      <h3>{title}</h3>
+      {showTitle && <h3>{title}</h3>}
       <div className="field-grid">
         <label>
           智能体名称
@@ -518,14 +529,19 @@ export function AgentSettings({
 }: Props) {
   const [createForm, setCreateForm] = useState<CreateAgentRequest>(emptyAgentRequest);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, UpdateAgentRequest>>({});
+  const modelNameById = useMemo(
+    () => Object.fromEntries(models.map((model) => [model.id, model.name])),
+    [models],
+  );
 
   const replyModels = useMemo(
     () =>
       models.filter(
         (model) =>
           model.enabled &&
-          (model.category === "llm" || model.category === "vlm") &&
+          (modelHasCategory(model, "llm") || modelHasCategory(model, "vlm")) &&
           hasMode(model.capabilities.outputModes, "text"),
       ),
     [models],
@@ -536,7 +552,7 @@ export function AgentSettings({
       models.filter(
         (model) =>
           model.enabled &&
-          model.category === "asr" &&
+          modelHasCategory(model, "asr") &&
           hasMode(model.capabilities.outputModes, "text"),
       ),
     [models],
@@ -547,7 +563,7 @@ export function AgentSettings({
       models.filter(
         (model) =>
           model.enabled &&
-          model.category === "tts" &&
+          modelHasCategory(model, "tts") &&
           hasMode(model.capabilities.outputModes, "audio"),
       ),
     [models],
@@ -558,7 +574,7 @@ export function AgentSettings({
       models.filter(
         (model) =>
           model.enabled &&
-          model.category === "vlm" &&
+          modelHasCategory(model, "vlm") &&
           hasMode(model.capabilities.inputModes, "image"),
       ),
     [models],
@@ -569,11 +585,13 @@ export function AgentSettings({
       models.filter(
         (model) =>
           model.enabled &&
-          (model.category === "llm" || model.category === "vlm") &&
+          (modelHasCategory(model, "llm") || modelHasCategory(model, "vlm")) &&
           hasMode(model.capabilities.outputModes, "text"),
       ),
     [models],
   );
+  const editingAgent = agents.find((agent) => agent.id === editingAgentId) ?? null;
+  const editingDraft = editingAgentId ? drafts[editingAgentId] : undefined;
 
   useEffect(() => {
     const next: Record<string, UpdateAgentRequest> = {};
@@ -591,83 +609,155 @@ export function AgentSettings({
   return (
     <section className="panel">
       <header className="panel-header">
-        <h2>智能体设置</h2>
-        <button
-          className="primary"
-          onClick={() => setShowCreate((current) => !current)}
-          type="button"
-        >
-          {showCreate ? "收起新增" : "新增"}
-        </button>
+        <div>
+          <h2>智能体</h2>
+          <small className="hint">管理角色设定、槽位模型和参数覆盖。</small>
+        </div>
+        <div className="section-actions">
+          <button
+            className="primary"
+            onClick={() => setShowCreate(true)}
+            type="button"
+          >
+            新增
+          </button>
+        </div>
       </header>
 
       {showCreate && (
-        <article className="card">
-          <AgentForm
-            asrModels={asrModels}
-            decisionModels={toolModels}
-            onChange={(value) => setCreateForm(value as CreateAgentRequest)}
-            replyModels={replyModels}
-            toolModels={toolModels}
-            ttsModels={ttsModels}
-            title="新增智能体"
-            value={createForm}
-            visionModels={visionModels}
-          />
-          <button
-            className="primary"
-            disabled={saving}
-            onClick={async () => {
-              await onCreate(createForm);
-              setCreateForm(emptyAgentRequest());
-              setShowCreate(false);
-            }}
-            type="button"
-          >
-            新建智能体
-          </button>
-        </article>
+        <FormModal title="新增智能体" onClose={() => setShowCreate(false)}>
+          <div className="stack">
+            <AgentForm
+              asrModels={asrModels}
+              decisionModels={toolModels}
+              onChange={(value) => setCreateForm(value as CreateAgentRequest)}
+              replyModels={replyModels}
+              showTitle={false}
+              toolModels={toolModels}
+              ttsModels={ttsModels}
+              title="新增智能体"
+              value={createForm}
+              visionModels={visionModels}
+            />
+            <div className="actions">
+              <button className="ghost" onClick={() => setShowCreate(false)} type="button">
+                取消
+              </button>
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={async () => {
+                  await onCreate(createForm);
+                  setCreateForm(emptyAgentRequest());
+                  setShowCreate(false);
+                }}
+                type="button"
+              >
+                新建智能体
+              </button>
+            </div>
+          </div>
+        </FormModal>
       )}
 
-      <div className="stack">
+      {editingAgent && editingDraft && (
+        <FormModal title={`编辑智能体：${editingAgent.name}`} onClose={() => setEditingAgentId(null)}>
+          <div className="stack">
+            <AgentForm
+              asrModels={asrModels}
+              decisionModels={toolModels}
+              onChange={(value) =>
+                setDrafts((current) => ({
+                  ...current,
+                  [editingAgent.id]: value as UpdateAgentRequest,
+                }))
+              }
+              replyModels={replyModels}
+              showTitle={false}
+              toolModels={toolModels}
+              ttsModels={ttsModels}
+              title={`编辑智能体：${editingAgent.name}`}
+              value={editingDraft}
+              visionModels={visionModels}
+            />
+            <div className="actions">
+              <button className="ghost" onClick={() => setEditingAgentId(null)} type="button">
+                取消
+              </button>
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={async () => {
+                  await onUpdate(editingAgent.id, editingDraft);
+                  setEditingAgentId(null);
+                }}
+                type="button"
+              >
+                保存设置
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      <div className="settings-summary-list">
+        {agents.length === 0 && (
+          <article className="card settings-summary-empty">
+            <p className="hint">还没有智能体，先新增一个。</p>
+          </article>
+        )}
         {agents.map((agent) => {
-          const draft = drafts[agent.id];
-          if (!draft) return null;
+          const componentCount = [
+            agent.modelSlots.component.asrModelId,
+            agent.modelSlots.component.ttsModelId,
+            agent.modelSlots.component.visionModelId,
+          ].filter(Boolean).length;
+          const toolCount = [
+            agent.modelSlots.tool.plannerModelId,
+            agent.modelSlots.tool.executorModelId,
+          ].filter(Boolean).length;
+          const personaPreview =
+            agent.persona.trim().length > 0 ? agent.persona.trim().slice(0, 88) : "未填写人格设定";
           return (
-            <article className="card" key={agent.id}>
-              <AgentForm
-                asrModels={asrModels}
-                decisionModels={toolModels}
-                onChange={(value) =>
-                  setDrafts((current) => ({
-                    ...current,
-                    [agent.id]: value as UpdateAgentRequest,
-                  }))
-                }
-                replyModels={replyModels}
-                toolModels={toolModels}
-                ttsModels={ttsModels}
-                title={`编辑智能体：${agent.name}`}
-                value={draft}
-                visionModels={visionModels}
-              />
-              <div className="actions">
-                <button
-                  className="primary"
-                  disabled={saving}
-                  onClick={() => onUpdate(agent.id, draft)}
-                  type="button"
-                >
-                  保存
-                </button>
-                <button
-                  className="danger"
-                  disabled={saving}
-                  onClick={() => onDelete(agent.id)}
-                  type="button"
-                >
-                  删除
-                </button>
+            <article className="card settings-summary-card" key={agent.id}>
+              <div className="settings-summary-head">
+                <div className="settings-summary-copy">
+                  <h3>{agent.name}</h3>
+                  <small>{agent.mode === "ambient" ? "常驻模式" : "对话模式"}</small>
+                  <p>{personaPreview}{agent.persona.trim().length > 88 ? "..." : ""}</p>
+                </div>
+                <div className="settings-summary-tools">
+                  <span className="status-badge is-live">
+                    {agent.mode === "ambient" ? "Ambient" : "Chat"}
+                  </span>
+                  <div className="settings-summary-actions">
+                    <ActionIconButton
+                      icon="edit"
+                      label="编辑设置"
+                      onClick={() => setEditingAgentId(agent.id)}
+                      tone="primary"
+                      type="button"
+                    />
+                    <ActionIconButton
+                      disabled={saving}
+                      icon="delete"
+                      label="删除"
+                      onClick={() => onDelete(agent.id)}
+                      tone="danger"
+                      type="button"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="settings-summary-meta">
+                <span className="settings-summary-pill">
+                  回复模型：{modelNameById[agent.modelSlots.reply.modelId] ?? agent.modelSlots.reply.modelId}
+                </span>
+                <span className="settings-summary-pill">组件槽位：{componentCount}</span>
+                <span className="settings-summary-pill">工具槽位：{toolCount}</span>
+                <span className="settings-summary-pill">
+                  决策：{agent.modelSlots.decision.enabled ? "已启用" : "未启用"}
+                </span>
               </div>
             </article>
           );

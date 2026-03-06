@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { ActionIconButton } from "@/components/ActionIconButton";
+import { FormModal } from "@/components/FormModal";
 import type {
   CreateProviderRequest,
   ProbeProviderConnectionRequest,
@@ -51,11 +53,14 @@ export function ProviderSettings({
     emptyCreateRequest(presets[0]),
   );
   const [showCreate, setShowCreate] = useState(false);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, UpdateProviderRequest>>({});
   const [probing, setProbing] = useState<Record<string, boolean>>({});
   const [probeResults, setProbeResults] = useState<
     Record<string, ProbeProviderConnectionResponse | undefined>
   >({});
+  const editingProvider = providers.find((provider) => provider.id === editingProviderId) ?? null;
+  const editingDraft = editingProviderId ? drafts[editingProviderId] : undefined;
 
   useEffect(() => {
     const next: Record<string, UpdateProviderRequest> = {};
@@ -99,268 +104,324 @@ export function ProviderSettings({
   return (
     <section className="panel">
       <header className="panel-header">
-        <h2>模型提供商设置</h2>
-        <button
-          className="primary"
-          onClick={() => setShowCreate((current) => !current)}
-          type="button"
-        >
-          {showCreate ? "收起新增" : "新增"}
-        </button>
+        <div>
+          <h2>提供商</h2>
+          <small className="hint">管理模型来源、Key 池和连通性校验。</small>
+        </div>
+        <div className="section-actions">
+          <button
+            className="primary"
+            onClick={() => setShowCreate(true)}
+            type="button"
+          >
+            新增
+          </button>
+        </div>
       </header>
 
       {showCreate && (
-        <article className="card">
-          <h3>新增提供商配置</h3>
-          <div className="field-grid">
-            <label>
-              设置项名称
-              <input
-                value={createForm.displayName}
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    displayName: event.target.value,
-                  }))
-                }
-                placeholder="例如：OpenAI 主力池"
-              />
-            </label>
-
-            <label>
-              提供商类型
-              <select
-                value={createForm.providerKind}
-                onChange={(event) => {
-                  const preset = presetMap[event.target.value];
-                  setCreateForm((current) => ({
-                    ...current,
-                    providerKind: event.target.value,
-                    apiBase: preset?.apiBase ?? current.apiBase,
-                  }));
-                }}
-              >
-                <option value="">请选择</option>
-                {presets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label>
-            API Base URL
-            <input
-              value={createForm.apiBase}
-              onChange={(event) =>
-                setCreateForm((current) => ({
-                  ...current,
-                  apiBase: event.target.value,
-                }))
-              }
-              placeholder="https://api.example.com/v1"
-            />
-          </label>
-
-          <div className="sub-header">
-            <strong>Key 池</strong>
-            <button
-              className="ghost"
-              onClick={() => setCreateForm((current) => addKey(current))}
-              type="button"
-            >
-              新增 Key
-            </button>
-          </div>
-
+        <FormModal title="新增提供商配置" onClose={() => setShowCreate(false)}>
           <div className="stack">
-            {createForm.keys.map((key, index) => (
-              <input
-                key={`create-key-${index}`}
-                value={key}
-                onChange={(event) =>
-                  setCreateForm((current) => updateKeys(current, index, event.target.value))
-                }
-                placeholder={`Key #${index + 1}`}
-                type="password"
-              />
-            ))}
-          </div>
-
-          <button
-            className="primary"
-            disabled={saving}
-            onClick={async () => {
-              await onCreate(createForm);
-              setCreateForm(emptyCreateRequest(presets[0]));
-              setShowCreate(false);
-            }}
-            type="button"
-          >
-            新建提供商配置
-          </button>
-        </article>
-      )}
-
-      <div className="stack">
-        {providers.map((provider) => {
-          const draft = drafts[provider.id];
-          if (!draft) return null;
-          const preset = presetMap[draft.providerKind];
-          const probeResult = probeResults[provider.id];
-          const probeRunning = probing[provider.id] ?? false;
-
-          return (
-            <article className="card" key={provider.id}>
-              <div className="field-grid">
-                <label>
-                  设置项名称
-                  <input
-                    value={draft.displayName}
-                    onChange={(event) =>
-                      setDraft(provider.id, (current) => ({
-                        ...current,
-                        displayName: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-
-                <label>
-                  提供商类型
-                  <select
-                    value={draft.providerKind}
-                    onChange={(event) => {
-                      const nextPreset = presetMap[event.target.value];
-                      setDraft(provider.id, (current) => ({
-                        ...current,
-                        providerKind: event.target.value,
-                        apiBase: nextPreset?.apiBase ?? current.apiBase,
-                      }));
-                    }}
-                  >
-                    <option value="">请选择</option>
-                    {presets.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+            <div className="field-grid">
+              <label>
+                设置项名称
+                <input
+                  value={createForm.displayName}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      displayName: event.target.value,
+                    }))
+                  }
+                  placeholder="例如：OpenAI 主力池"
+                />
+              </label>
 
               <label>
-                API Base URL
-                <input
-                  value={draft.apiBase}
-                  onChange={(event) =>
-                    setDraft(provider.id, (current) => ({
+                提供商类型
+                <select
+                  value={createForm.providerKind}
+                  onChange={(event) => {
+                    const preset = presetMap[event.target.value];
+                    setCreateForm((current) => ({
                       ...current,
-                      apiBase: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <div className="sub-header">
-                <strong>Key 池</strong>
-                <button
-                  className="ghost"
-                  onClick={() => setDraft(provider.id, (current) => addKey(current))}
-                  type="button"
-                >
-                  新增 Key
-                </button>
-              </div>
-
-              <div className="stack">
-                {draft.keys.map((key, index) => (
-                  <input
-                    key={`${provider.id}-key-${index}`}
-                    value={key}
-                    onChange={(event) =>
-                      setDraft(provider.id, (current) =>
-                        updateKeys(current, index, event.target.value),
-                      )
-                    }
-                    placeholder={`Key #${index + 1}`}
-                    type="password"
-                  />
-                ))}
-              </div>
-
-              <label className="inline-check">
-                <input
-                  checked={draft.enabled}
-                  onChange={(event) =>
-                    setDraft(provider.id, (current) => ({
-                      ...current,
-                      enabled: event.target.checked,
-                    }))
-                  }
-                  type="checkbox"
-                />
-                启用该提供商配置
-              </label>
-
-              <small className="hint">
-                {preset?.supportsMultiKey
-                  ? "该提供商建议启用多 Key 轮询。"
-                  : "该提供商通常使用单 Key，也可拆分多个设置项。"}
-              </small>
-
-              <div className="actions">
-                <button
-                  className="ghost"
-                  disabled={saving || probeRunning}
-                  onClick={async () => {
-                    setProbing((current) => ({ ...current, [provider.id]: true }));
-                    try {
-                      const result = await onProbe({ providerId: provider.id });
-                      setProbeResults((current) => ({ ...current, [provider.id]: result }));
-                    } catch (error) {
-                      const message =
-                        typeof error === "object" &&
-                        error !== null &&
-                        "message" in error &&
-                        typeof (error as Record<string, unknown>).message === "string"
-                          ? ((error as Record<string, unknown>).message as string)
-                          : "探测失败";
-                      setProbeResults((current) => ({
-                        ...current,
-                        [provider.id]: {
-                          providerId: provider.id,
-                          reachable: false,
-                          latencyMs: 0,
-                          detail: message,
-                        },
-                      }));
-                    } finally {
-                      setProbing((current) => ({ ...current, [provider.id]: false }));
-                    }
+                      providerKind: event.target.value,
+                      apiBase: preset?.apiBase ?? current.apiBase,
+                    }));
                   }}
-                  type="button"
                 >
-                  {probeRunning ? "探测中..." : "连通测试"}
-                </button>
-                <button
-                  className="primary"
-                  disabled={saving}
-                  onClick={() => onUpdate(provider.id, draft)}
-                  type="button"
+                  <option value="">请选择</option>
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label>
+              API Base URL
+              <input
+                value={createForm.apiBase}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    apiBase: event.target.value,
+                  }))
+                }
+                placeholder="https://api.example.com/v1"
+              />
+            </label>
+
+            <div className="sub-header">
+              <strong>Key 池</strong>
+              <button
+                className="ghost"
+                onClick={() => setCreateForm((current) => addKey(current))}
+                type="button"
+              >
+                新增 Key
+              </button>
+            </div>
+
+            <div className="stack">
+              {createForm.keys.map((key, index) => (
+                <input
+                  key={`create-key-${index}`}
+                  value={key}
+                  onChange={(event) =>
+                    setCreateForm((current) => updateKeys(current, index, event.target.value))
+                  }
+                  placeholder={`Key #${index + 1}`}
+                  type="password"
+                />
+              ))}
+            </div>
+
+            <div className="actions">
+              <button className="ghost" onClick={() => setShowCreate(false)} type="button">
+                取消
+              </button>
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={async () => {
+                  await onCreate(createForm);
+                  setCreateForm(emptyCreateRequest(presets[0]));
+                  setShowCreate(false);
+                }}
+                type="button"
+              >
+                新建提供商配置
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      {editingProvider && editingDraft && (
+        <FormModal title={`编辑提供商：${editingProvider.displayName}`} onClose={() => setEditingProviderId(null)}>
+          <div className="stack">
+            <div className="field-grid">
+              <label>
+                设置项名称
+                <input
+                  value={editingDraft.displayName}
+                  onChange={(event) =>
+                    setDraft(editingProvider.id, (current) => ({
+                      ...current,
+                      displayName: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+
+              <label>
+                提供商类型
+                <select
+                  value={editingDraft.providerKind}
+                  onChange={(event) => {
+                    const nextPreset = presetMap[event.target.value];
+                    setDraft(editingProvider.id, (current) => ({
+                      ...current,
+                      providerKind: event.target.value,
+                      apiBase: nextPreset?.apiBase ?? current.apiBase,
+                    }));
+                  }}
                 >
-                  保存
-                </button>
-                <button
-                  className="danger"
-                  disabled={saving}
-                  onClick={() => onDelete(provider.id)}
-                  type="button"
-                >
-                  删除
-                </button>
+                  <option value="">请选择</option>
+                  {presets.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label>
+              API Base URL
+              <input
+                value={editingDraft.apiBase}
+                onChange={(event) =>
+                  setDraft(editingProvider.id, (current) => ({
+                    ...current,
+                    apiBase: event.target.value,
+                  }))
+                }
+              />
+            </label>
+
+            <div className="sub-header">
+              <strong>Key 池</strong>
+              <button
+                className="ghost"
+                onClick={() => setDraft(editingProvider.id, (current) => addKey(current))}
+                type="button"
+              >
+                新增 Key
+              </button>
+            </div>
+
+            <div className="stack">
+              {editingDraft.keys.map((key, index) => (
+                <input
+                  key={`${editingProvider.id}-key-${index}`}
+                  value={key}
+                  onChange={(event) =>
+                    setDraft(editingProvider.id, (current) =>
+                      updateKeys(current, index, event.target.value),
+                    )
+                  }
+                  placeholder={`Key #${index + 1}`}
+                  type="password"
+                />
+              ))}
+            </div>
+
+            <label className="inline-check">
+              <input
+                checked={editingDraft.enabled}
+                onChange={(event) =>
+                  setDraft(editingProvider.id, (current) => ({
+                    ...current,
+                    enabled: event.target.checked,
+                  }))
+                }
+                type="checkbox"
+              />
+              启用该提供商配置
+            </label>
+
+            <small className="hint">
+              {presetMap[editingDraft.providerKind]?.supportsMultiKey
+                ? "该提供商建议启用多 Key 轮询。"
+                : "该提供商通常使用单 Key，也可拆分多个设置项。"}
+            </small>
+
+            <div className="actions">
+              <button className="ghost" onClick={() => setEditingProviderId(null)} type="button">
+                取消
+              </button>
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={async () => {
+                  await onUpdate(editingProvider.id, editingDraft);
+                  setEditingProviderId(null);
+                }}
+                type="button"
+              >
+                保存设置
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      <div className="settings-summary-list">
+        {providers.length === 0 && (
+          <article className="card settings-summary-empty">
+            <p className="hint">还没有提供商配置，先新增一个。</p>
+          </article>
+        )}
+        {providers.map((provider) => {
+          const preset = presetMap[provider.providerKind];
+          const probeResult = probeResults[provider.id];
+          const probeRunning = probing[provider.id] ?? false;
+          const keyCount = provider.keys.filter((key) => key.trim().length > 0).length;
+
+          return (
+            <article className="card settings-summary-card" key={provider.id}>
+              <div className="settings-summary-head">
+                <div className="settings-summary-copy">
+                  <h3>{provider.displayName}</h3>
+                  <small>{preset?.name ?? provider.providerKind ?? "未选择提供商类型"}</small>
+                </div>
+                <div className="settings-summary-tools">
+                  <span className={provider.enabled ? "status-badge is-live" : "status-badge"}>
+                    {provider.enabled ? "已启用" : "已停用"}
+                  </span>
+                  <div className="settings-summary-actions">
+                    <ActionIconButton
+                      busy={probeRunning}
+                      disabled={saving || probeRunning}
+                      icon="probe"
+                      label={probeRunning ? "探测中" : "连通测试"}
+                      onClick={async () => {
+                        setProbing((current) => ({ ...current, [provider.id]: true }));
+                        try {
+                          const result = await onProbe({ providerId: provider.id });
+                          setProbeResults((current) => ({ ...current, [provider.id]: result }));
+                        } catch (error) {
+                          const message =
+                            typeof error === "object" &&
+                            error !== null &&
+                            "message" in error &&
+                            typeof (error as Record<string, unknown>).message === "string"
+                              ? ((error as Record<string, unknown>).message as string)
+                              : "探测失败";
+                          setProbeResults((current) => ({
+                            ...current,
+                            [provider.id]: {
+                              providerId: provider.id,
+                              reachable: false,
+                              latencyMs: 0,
+                              detail: message,
+                            },
+                          }));
+                        } finally {
+                          setProbing((current) => ({ ...current, [provider.id]: false }));
+                        }
+                      }}
+                      tone="ghost"
+                      type="button"
+                    />
+                    <ActionIconButton
+                      icon="edit"
+                      label="编辑设置"
+                      onClick={() => setEditingProviderId(provider.id)}
+                      tone="primary"
+                      type="button"
+                    />
+                    <ActionIconButton
+                      disabled={saving}
+                      icon="delete"
+                      label="删除"
+                      onClick={() => onDelete(provider.id)}
+                      tone="danger"
+                      type="button"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="settings-summary-meta">
+                <span className="settings-summary-pill">API Base：{provider.apiBase || "未设置"}</span>
+                <span className="settings-summary-pill">Key：{keyCount}</span>
+                <span className="settings-summary-pill">
+                  {preset?.supportsMultiKey ? "支持多 Key" : "单 Key / 多配置"}
+                </span>
               </div>
               {probeResult && (
                 <small className={probeResult.reachable ? "hint" : "error-inline"}>

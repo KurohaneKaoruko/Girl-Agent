@@ -4,36 +4,34 @@ import { ChatWorkspace } from "@/features/chat/ChatWorkspace";
 import { LoginPage } from "@/LoginPage";
 import { ModelSettings } from "@/features/model/ModelSettings";
 import { ProviderSettings } from "@/features/provider/ProviderSettings";
+import { describeApiError } from "@/lib/errorDisplay";
 import { getApiClient, getHeadlessConfig, setHeadlessConfig } from "@/lib/apiClient";
 import type {
   AgentConfig,
   ApiError,
   AppBootstrap,
-  ChatWithAgentRequest,
-  ChatWithAgentResponse,
+  ChatWithSessionRequest,
   CreateAgentRequest,
   CreateModelRequest,
   CreateProviderRequest,
+  CreateWorkspaceChatSessionRequest,
   ModelConfig,
   ProbeModelConnectionRequest,
   ProbeModelConnectionResponse,
   ProbeProviderConnectionRequest,
   ProbeProviderConnectionResponse,
   ProviderConfig,
-  RegenerateChatReplyRequest,
-  RewriteChatUserMessageRequest,
   RuntimeStatusResponse,
-  UndoLastChatTurnRequest,
-  UndoLastChatTurnResponse,
   UpdateAgentRequest,
   UpdateModelRequest,
   UpdateProviderRequest,
+  UpdateWorkspaceChatSessionRequest,
 } from "@/types";
 
 type MainSection = "overview" | "chat" | "provider" | "model" | "agent" | "settings";
 
 const fallbackBootstrap: AppBootstrap = {
-  appName: "少女智能体",
+  appName: "Girl-AI-Agent",
   appVersion: "0.1.0",
   apiVersion: "1.0.0",
   providerPresets: [],
@@ -52,46 +50,6 @@ const navItems: Array<{ key: MainSection; label: string; caption: string }> = [
   { key: "agent", label: "智能体", caption: "角色设定" },
   { key: "settings", label: "设置", caption: "工作台设置" },
 ];
-
-const sectionMeta: Record<
-  MainSection,
-  {
-    eyebrow: string;
-    title: string;
-    description: string;
-  }
-> = {
-  overview: {
-    eyebrow: "控制中心",
-    title: "系统总览",
-    description: "统一查看运行状态、资源规模与当前控制台入口。",
-  },
-  chat: {
-    eyebrow: "实时对话",
-    title: "聊天工作台",
-    description: "围绕智能体与多会话展开的主操作舞台，保持效率同时提升沉浸感。",
-  },
-  provider: {
-    eyebrow: "提供商配置",
-    title: "提供商设置",
-    description: "集中维护各类模型提供商与连接状态，保持后续模型接入一致。",
-  },
-  model: {
-    eyebrow: "模型编排",
-    title: "模型设置",
-    description: "管理模型类型、模态与默认参数，为智能体分配可用能力。",
-  },
-  agent: {
-    eyebrow: "角色设定",
-    title: "智能体设置",
-    description: "配置人格、说话规则与槽位分配，形成统一的角色工作流。",
-  },
-  settings: {
-    eyebrow: "工作台设置",
-    title: "工作台设置",
-    description: "管理当前控制台连接状态与刷新入口，维持 Web / App 一致体验。",
-  },
-};
 
 const readPersistedLoginState = (): boolean => {
   if (typeof window === "undefined") {
@@ -152,8 +110,8 @@ export function App() {
     isTauri ? true : readPersistedLoginState(),
   );
   const [activeSection, setActiveSection] = useState<MainSection>("chat");
-  const [activeAgentId, setActiveAgentId] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const errorDisplay = error ? describeApiError(error) : null;
 
   const safeError = useCallback((rawError: unknown) => {
     const mapped = toApiError(rawError);
@@ -217,17 +175,6 @@ export function App() {
   }, [isAuthenticated, loadAll, safeError]);
 
   useEffect(() => {
-    if (agents.length === 0) {
-      setActiveAgentId("");
-      return;
-    }
-    const exists = agents.some((agent) => agent.id === activeAgentId);
-    if (!exists) {
-      setActiveAgentId(agents[0].id);
-    }
-  }, [activeAgentId, agents]);
-
-  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -282,7 +229,6 @@ export function App() {
     setProviders([]);
     setModels([]);
     setAgents([]);
-    setActiveAgentId("");
     persistLoginState(false);
   }, [headlessBaseUrl]);
 
@@ -304,17 +250,13 @@ export function App() {
     [refreshRuntimeStatus],
   );
 
-  const activeAgent = useMemo(
-    () => agents.find((item) => item.id === activeAgentId) ?? null,
-    [activeAgentId, agents],
-  );
+  const featuredAgent = useMemo(() => agents[0] ?? null, [agents]);
   const handleSectionSelect = useCallback((section: MainSection) => {
     setActiveSection(section);
     if (isMobileViewport()) {
       setIsMobileNavOpen(false);
     }
   }, []);
-  const activeMeta = sectionMeta[activeSection];
   const overviewStats = [
     {
       label: "提供商",
@@ -366,7 +308,7 @@ export function App() {
         <div className="app-brand">
           <div className="app-brand-main">
             <span className="app-brand-kicker">少女智能体控制台</span>
-            <h1>GirlAgent</h1>
+            <h1>Girl-AI-Agent</h1>
           </div>
           <button
             aria-controls="console-nav"
@@ -403,37 +345,19 @@ export function App() {
       </aside>
 
       <section className="app-content">
-        <header className="app-content-hero">
-          <div className="app-content-copy">
-            <span className="hero-chip">{activeMeta.eyebrow}</span>
-            <h2>{activeMeta.title}</h2>
-            <p>{activeMeta.description}</p>
-          </div>
-          <div className="app-content-metrics">
-            <div className="hero-metric">
-              <strong>{agents.length}</strong>
-              <span>智能体</span>
-            </div>
-            <div className="hero-metric">
-              <strong>{backendStatus}</strong>
-              <span>后端状态</span>
-            </div>
-            <div className="hero-metric">
-              <strong>{isTauri ? "桌面端" : "网页端"}</strong>
-              <span>当前入口</span>
-            </div>
-          </div>
-        </header>
-
         {activeSection === "overview" && (
           <section className="panel panel-overview">
             <article className="overview-hero-card">
               <div className="overview-hero-copy">
-                <span className="hero-chip hero-chip-soft">{bootstrap.appName}</span>
-                <h3>把模型、智能体和会话集中到同一个工作台。</h3>
-                <p>
-                  当前控制台同时服务于网页端和桌面端。你可以在同一套界面里完成配置、校验和多会话对话，不用在不同页面之间来回切换。
-                </p>
+                <span className="hero-chip hero-chip-soft">Girl AI Agent</span>
+                <h3>系统总览</h3>
+                <p>统一查看运行状态、主要资源和当前控制台连接，不再在不同页面之间来回确认。</p>
+                <div className="overview-meta-row">
+                  <span className="overview-meta-pill">{bootstrap.appName}</span>
+                  <span className="overview-meta-pill">入口：{isTauri ? "桌面端" : "网页端"}</span>
+                  <span className="overview-meta-pill">后端：{backendStatus}</span>
+                  <span className="overview-meta-pill">智能体：{agents.length}</span>
+                </div>
               </div>
               <div className="overview-hero-actions">
                 <button className="primary" disabled={saving} onClick={() => void withAction(loadAll)} type="button">
@@ -464,8 +388,8 @@ export function App() {
               </article>
               <article className="card overview-detail-card">
                 <h3>当前焦点</h3>
-                <small>当前智能体：{activeAgent?.name ?? "未选择"}</small>
-                <small>运行模式：{activeAgent?.mode ?? "等待选择"}</small>
+                <small>示例智能体：{featuredAgent?.name ?? "尚未创建"}</small>
+                <small>运行模式：{featuredAgent?.mode ?? "等待配置"}</small>
                 <small>功能分区：{navItems.length}</small>
               </article>
               <article className="card overview-detail-card">
@@ -479,77 +403,38 @@ export function App() {
         )}
 
         {activeSection === "chat" && (
-          <section className="panel">
-            <header className="panel-header">
-              <h2>聊天工作台</h2>
-              <div className="actions">
-                <label className="compact-field">
-                  当前智能体
-                  <select onChange={(event) => setActiveAgentId(event.target.value)} value={activeAgentId}>
-                    {agents.length === 0 && <option value="">暂无智能体</option>}
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="ghost" onClick={() => setActiveSection("agent")} type="button">
-                  管理智能体
-                </button>
-              </div>
-            </header>
-            {activeAgent && <small className="hint">模式：{activeAgent.mode}</small>}
-            <ChatWorkspace
-              agents={agents}
-              disabled={saving}
-              focusedAgentId={activeAgentId}
-              onChat={(input: ChatWithAgentRequest) => callChat(() => api.chatWithAgent(input))}
-              onChatStream={(input: ChatWithAgentRequest, onDelta: (chunk: string) => void, signal?: AbortSignal) =>
-                callChat(() => api.chatWithAgentStream(input, onDelta, signal), true)
-              }
-              onRegenerate={(input: RegenerateChatReplyRequest) => callChat(() => api.regenerateChatReply(input))}
-              onRegenerateStream={(input: RegenerateChatReplyRequest, onDelta: (chunk: string) => void, signal?: AbortSignal) =>
-                callChat(() => api.regenerateChatReplyStream(input, onDelta, signal), true)
-              }
-              onUndoLastTurn={(input: UndoLastChatTurnRequest): Promise<UndoLastChatTurnResponse> =>
-                callChat(() => api.undoLastChatTurn(input))
-              }
-              onRewriteUserMessage={(input: RewriteChatUserMessageRequest) =>
-                callChat(() => api.rewriteChatUserMessage(input))
-              }
-              onListSessions={(agentId: string) => api.listAgentChatSessions(agentId)}
-              onCreateSession={(agentId: string, title: string) => callChat(() => api.createAgentChatSession(agentId, title))}
-              onRenameSession={(agentId: string, sessionId: string, title: string) =>
-                api.renameAgentChatSession(agentId, sessionId, title)
-              }
-              onDuplicateSession={(agentId: string, sourceSessionId: string, title: string) =>
-                callChat(() => api.duplicateAgentChatSession(agentId, sourceSessionId, title))
-              }
-              onSetSessionPinned={(agentId: string, sessionId: string, pinned: boolean) =>
-                api.setAgentChatSessionPinned(agentId, sessionId, pinned)
-              }
-              onSetSessionArchived={(agentId: string, sessionId: string, archived: boolean) =>
-                api.setAgentChatSessionArchived(agentId, sessionId, archived)
-              }
-              onSetSessionTags={(agentId: string, sessionId: string, tags: string[]) =>
-                api.setAgentChatSessionTags(agentId, sessionId, tags)
-              }
-              onDeleteSession={(agentId: string, sessionId: string) =>
-                callChat(async () => {
-                  await api.deleteAgentChatSession(agentId, sessionId);
-                })
-              }
-              onLoadSessionMessages={(agentId: string, sessionId: string) =>
-                api.listChatSessionMessages(agentId, sessionId)
-              }
-              onClearSessionMessages={(agentId: string, sessionId: string) =>
-                callChat(async () => {
-                  await api.clearChatSessionMessages(agentId, sessionId);
-                })
-              }
-            />
-          </section>
+          <ChatWorkspace
+            agents={agents}
+            disabled={saving}
+            onListSessions={() => api.listWorkspaceChatSessions()}
+            onCreateSession={(input: CreateWorkspaceChatSessionRequest) =>
+              callChat(() => api.createWorkspaceChatSession(input))
+            }
+            onUpdateSession={(sessionId: string, input: UpdateWorkspaceChatSessionRequest) =>
+              callChat(() => api.updateWorkspaceChatSession(sessionId, input))
+            }
+            onDeleteSession={(sessionId: string) =>
+              callChat(async () => {
+                await api.deleteWorkspaceChatSession(sessionId);
+              })
+            }
+            onListMessages={(sessionId: string) => api.listWorkspaceChatMessages(sessionId)}
+            onClearMessages={(sessionId: string) =>
+              callChat(async () => {
+                await api.clearWorkspaceChatMessages(sessionId);
+              })
+            }
+            onOpenAgentSettings={() => handleSectionSelect("agent")}
+            onSendMessageStream={(
+              input: ChatWithSessionRequest,
+              onReplyStart,
+              onDelta,
+              signal?: AbortSignal,
+            ) =>
+              callChat(() => api.chatWithSessionStream(input, onReplyStart, onDelta, signal), true).then(
+                () => undefined,
+              )}
+          />
         )}
 
         {activeSection === "provider" && (
@@ -651,12 +536,15 @@ export function App() {
         {activeSection === "settings" && (
           <section className="panel">
             <header className="panel-header">
-              <h2>设置</h2>
+              <div>
+                <h2>设置</h2>
+                <small className="hint">管理当前控制台连接、刷新和登录状态。</small>
+              </div>
             </header>
             <article className="card settings-card">
               <div className="settings-grid">
                 <div className="settings-copy">
-                  <h3>工作台设置</h3>
+                  <h3>连接与登录</h3>
                   <small className="hint">当前 Base URL：{headlessBaseUrl || "桌面端内置入口"}</small>
                   <small className="hint">当前环境：{isTauri ? "Tauri Desktop" : "Web Console"}</small>
                   <small className="hint">后端状态：{backendStatus}</small>
@@ -676,10 +564,10 @@ export function App() {
           </section>
         )}
 
-        {error && (
+        {error && errorDisplay && (
           <div className="error-box">
-            <strong>{error.code}</strong>
-            <div>{error.message}</div>
+            <strong>{errorDisplay.title}</strong>
+            <div>{errorDisplay.message}</div>
           </div>
         )}
       </section>

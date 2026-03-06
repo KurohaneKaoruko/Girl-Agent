@@ -39,8 +39,8 @@ export function LoginPage({
     <main className="login-page">
       <section className="login-stage">
         <article className="login-brand-panel">
-          <span className="hero-chip hero-chip-soft">GirlAgent 控制台</span>
-          <h1>少女智能体控制台</h1>
+          <span className="hero-chip hero-chip-soft">G.A.A.</span>
+          <h1>Girl-AI-Agent 控制台</h1>
           <p>统一管理提供商、模型、智能体和多会话聊天，网页端与桌面端共用同一套界面。</p>
           <div className="login-feature-list">
             <article className="login-feature-card">

@@ -11,14 +11,16 @@ use axum::{
 };
 use girlagent_core::error::ErrorPayload;
 use girlagent_core::{
-    AppError, AppService, ChatWithAgentRequest, ChatWithAgentResponse, CreateAgentRequest,
-    CreateChatSessionRequest, CreateModelRequest, CreateProviderRequest, DuplicateChatSessionRequest,
-    OpenAICompatChatGateway, RegenerateChatReplyRequest, RenameChatSessionRequest,
-    ProbeModelConnectionRequest, ProbeModelConnectionResponse, ProbeProviderConnectionRequest,
-    ProbeProviderConnectionResponse, RewriteChatUserMessageRequest, RewriteLastUserMessageRequest,
+    AppError, AppService, ChatWithAgentRequest, ChatWithAgentResponse, ChatWithSessionRequest,
+    ChatWithSessionResponse, CreateAgentRequest, CreateChatSessionRequest, CreateModelRequest,
+    CreateProviderRequest, CreateWorkspaceChatSessionRequest, DuplicateChatSessionRequest,
+    OpenAICompatChatGateway, ProbeModelConnectionRequest, ProbeModelConnectionResponse,
+    ProbeProviderConnectionRequest, ProbeProviderConnectionResponse, RegenerateChatReplyRequest,
+    RenameChatSessionRequest, RewriteChatUserMessageRequest, RewriteLastUserMessageRequest,
     RuntimeStatusResponse, SetChatSessionArchivedRequest, SetChatSessionPinnedRequest,
     SetChatSessionTagsRequest, SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse,
     UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
+    UpdateWorkspaceChatSessionRequest,
 };
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
@@ -46,14 +48,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let store = SqliteStore::connect(&db_url).await?;
     let state = AppState {
-        service: AppService::new(Arc::new(store), "GirlAgent", "0.1.0"),
+        service: AppService::new(Arc::new(store), "Girl-AI-Agent", "0.1.0"),
         chat_gateway: OpenAICompatChatGateway::new(),
         bearer_token: token,
     };
 
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    println!("GirlAgent headless listening at http://{bind_addr}");
+    println!("Girl-AI-Agent headless listening at http://{bind_addr}");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -73,6 +75,20 @@ fn build_router(state: AppState) -> Router {
         .route("/api/models/{id}", put(update_model).delete(delete_model))
         .route("/api/agents", get(list_agents).post(create_agent))
         .route("/api/agents/{id}", put(update_agent).delete(delete_agent))
+        .route(
+            "/api/workspace/sessions",
+            get(list_workspace_chat_sessions).post(create_workspace_chat_session),
+        )
+        .route(
+            "/api/workspace/sessions/{session_id}",
+            put(update_workspace_chat_session).delete(delete_workspace_chat_session),
+        )
+        .route(
+            "/api/workspace/sessions/{session_id}/messages",
+            get(list_workspace_chat_messages).delete(clear_workspace_chat_messages),
+        )
+        .route("/api/workspace/chat", post(chat_with_session))
+        .route("/api/workspace/chat/stream", post(chat_with_session_stream))
         .route(
             "/api/agents/{id}/chat/sessions",
             get(list_agent_chat_sessions).post(create_agent_chat_session),
@@ -365,6 +381,78 @@ async fn clear_agent_chat_messages(
         .map_err(map_error)
 }
 
+async fn list_workspace_chat_sessions(
+    State(state): State<AppState>,
+) -> ApiResponse<Vec<girlagent_core::WorkspaceChatSession>> {
+    state
+        .service
+        .list_workspace_chat_sessions()
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
+async fn create_workspace_chat_session(
+    State(state): State<AppState>,
+    Json(input): Json<CreateWorkspaceChatSessionRequest>,
+) -> ApiResponse<girlagent_core::WorkspaceChatSession> {
+    state
+        .service
+        .create_workspace_chat_session(input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
+async fn update_workspace_chat_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(input): Json<UpdateWorkspaceChatSessionRequest>,
+) -> ApiResponse<girlagent_core::WorkspaceChatSession> {
+    state
+        .service
+        .update_workspace_chat_session(&session_id, input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
+async fn delete_workspace_chat_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .delete_workspace_chat_session(&session_id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn list_workspace_chat_messages(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> ApiResponse<Vec<girlagent_core::WorkspaceChatMessage>> {
+    state
+        .service
+        .list_workspace_chat_messages(&session_id)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
+async fn clear_workspace_chat_messages(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .clear_workspace_chat_messages(&session_id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
 async fn list_agent_chat_sessions(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -501,6 +589,61 @@ async fn chat_with_agent(
         .await
         .map(Json)
         .map_err(map_error)
+}
+
+async fn chat_with_session(
+    State(state): State<AppState>,
+    Json(input): Json<ChatWithSessionRequest>,
+) -> ApiResponse<ChatWithSessionResponse> {
+    state
+        .service
+        .chat_with_session(&state.chat_gateway, input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
+async fn chat_with_session_stream(
+    State(state): State<AppState>,
+    Json(input): Json<ChatWithSessionRequest>,
+) -> Result<Sse<impl futures_core::Stream<Item = Result<Event, Infallible>>>, (StatusCode, Json<ErrorPayload>)>
+{
+    let result = state
+        .service
+        .chat_with_session(&state.chat_gateway, input)
+        .await
+        .map_err(map_error)?;
+
+    let start_payload = serde_json::json!({
+        "sessionId": result.session_id,
+    })
+    .to_string();
+    let done_payload = serde_json::to_string(&result)
+        .map_err(|error| map_error(AppError::internal(error.to_string())))?;
+
+    let stream = stream! {
+        yield Ok(Event::default().event("start").data(start_payload));
+        for reply in &result.replies {
+            let reply_start_payload = serde_json::json!({
+                "agentId": reply.agent_id,
+                "agentName": reply.agent_name,
+                "modelRefId": reply.model_ref_id,
+                "modelId": reply.model_id,
+            })
+            .to_string();
+            yield Ok(Event::default().event("reply_start").data(reply_start_payload));
+            for chunk in split_stream_chunks(&reply.message, 24) {
+                yield Ok(Event::default().event("delta").data(serde_json::json!({
+                    "agentId": reply.agent_id,
+                    "text": chunk
+                }).to_string()));
+                tokio::time::sleep(Duration::from_millis(8)).await;
+            }
+        }
+        yield Ok(Event::default().event("done").data(done_payload));
+    };
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)).text("ping")))
 }
 
 async fn undo_last_chat_turn(

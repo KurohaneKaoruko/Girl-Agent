@@ -89,6 +89,7 @@ export type ModelConfig = {
   customProvider: CustomProvider | null;
   modelId: string;
   category: ModelCategory;
+  categories: ModelCategory[];
   capabilities: ModelCapabilities;
   params: ModelParams;
   enabled: boolean;
@@ -188,6 +189,46 @@ export type ChatMessage = {
   content: string;
 };
 
+export type WorkspaceChatParticipantMode = "all" | "mention";
+
+export type WorkspaceChatParticipant = {
+  agentId: string;
+  receiveMode: WorkspaceChatParticipantMode;
+  replyMode: WorkspaceChatParticipantMode;
+  sortOrder: number;
+};
+
+export type WorkspaceChatMessage = {
+  role: ChatMessageRole;
+  content: string;
+  agentId: string | null;
+  visibleToAgentIds: string[];
+  createdAt: string;
+};
+
+export type WorkspaceChatReply = {
+  agentId: string;
+  agentName: string;
+  modelRefId: string;
+  modelId: string;
+  message: string;
+};
+
+export type WorkspaceChatSession = {
+  id: string;
+  title: string;
+  participants: WorkspaceChatParticipant[];
+  isGroup: boolean;
+  isPinned: boolean;
+  isArchived: boolean;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessageRole: string | null;
+  lastMessagePreview: string | null;
+};
+
 export type ChatWithAgentRequest = {
   agentId: string;
   sessionId: string | null;
@@ -241,6 +282,33 @@ export type ChatWithAgentResponse = {
   modelRefId: string;
   modelId: string;
   message: string;
+};
+
+export type CreateWorkspaceChatSessionRequest = {
+  title: string;
+  participants: WorkspaceChatParticipant[];
+};
+
+export type UpdateWorkspaceChatSessionRequest = {
+  title: string;
+  participants: WorkspaceChatParticipant[];
+  isPinned: boolean;
+  isArchived: boolean;
+  tags: string[];
+};
+
+export type ChatWithSessionRequest = {
+  sessionId: string;
+  userMessage: string;
+  temperature: number | null;
+  maxTokens: number | null;
+  topP: number | null;
+  frequencyPenalty: number | null;
+};
+
+export type ChatWithSessionResponse = {
+  sessionId: string;
+  replies: WorkspaceChatReply[];
 };
 
 export type UndoLastChatTurnResponse = {

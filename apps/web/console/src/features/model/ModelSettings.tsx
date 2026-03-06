@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { ActionIconButton } from "@/components/ActionIconButton";
+import { FormModal } from "@/components/FormModal";
 import type {
   CreateModelRequest,
   ModelCapabilities,
@@ -20,13 +22,47 @@ type Props = {
   onProbe: (input: ProbeModelConnectionRequest) => Promise<ProbeModelConnectionResponse>;
 };
 
+type ModeOption = {
+  value: string;
+  label: string;
+};
+
+const commonModeOptions: ModeOption[] = [
+  { value: "text", label: "文本" },
+  { value: "image", label: "图像" },
+  { value: "audio", label: "音频" },
+  { value: "video", label: "视频" },
+];
+
+const commonModeValueSet = new Set(commonModeOptions.map((item) => item.value));
+
+const uniqueModes = (values: string[]) =>
+  Array.from(
+    new Set(
+      values
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => item.length > 0),
+    ),
+  );
+
 const splitModes = (text: string) =>
-  text
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+  uniqueModes(text.split(/[,\n，]/));
 
 const joinModes = (values: string[]) => values.join(", ");
+const hasMode = (values: string[], target: string) =>
+  values.some((item) => item.trim().toLowerCase() === target);
+const toggleMode = (values: string[], target: string) =>
+  hasMode(values, target)
+    ? values.filter((item) => item.trim().toLowerCase() !== target)
+    : uniqueModes([...values, target]);
+const extractCustomModes = (values: string[]) =>
+  values.filter((item) => !commonModeValueSet.has(item.trim().toLowerCase()));
+const syncCustomModes = (values: string[], raw: string) =>
+  uniqueModes([
+    ...values.filter((item) => commonModeValueSet.has(item.trim().toLowerCase())),
+    ...splitModes(raw).filter((item) => !commonModeValueSet.has(item)),
+  ]);
+const formatModes = (values: string[]) => (values.length > 0 ? values.join(" + ") : "未设置");
 
 const defaultCapabilities = (): ModelCapabilities => ({
   inputModes: ["text"],
@@ -42,6 +78,7 @@ const defaultCreateForm = (): CreateModelRequest => ({
   customProvider: null,
   modelId: "",
   category: "llm",
+  categories: ["llm"],
   capabilities: defaultCapabilities(),
   params: {
     temperature: 0.8,
@@ -58,6 +95,7 @@ const toUpdateForm = (model: ModelConfig): UpdateModelRequest => ({
   customProvider: model.customProvider,
   modelId: model.modelId,
   category: model.category,
+  categories: resolveCategories(model.category, model.categories),
   capabilities: model.capabilities,
   params: model.params,
   enabled: model.enabled,
@@ -70,22 +108,151 @@ const categoryOptions: Array<{ label: string; value: ModelCategory }> = [
   { label: "语音合成 (TTS)", value: "tts" },
 ];
 
+const categoryLabelByValue: Record<ModelCategory, string> = {
+  llm: "语言",
+  vlm: "视觉",
+  asr: "语音识别",
+  tts: "语音合成",
+};
+
+const categoryPresetByValue: Record<
+  ModelCategory,
+  { inputModes: string[]; outputModes: string[]; hint: string }
+> = {
+  llm: {
+    inputModes: ["text"],
+    outputModes: ["text"],
+    hint: "文本 -> 文本",
+  },
+  vlm: {
+    inputModes: ["text", "image"],
+    outputModes: ["text"],
+    hint: "文本/图像 -> 文本",
+  },
+  asr: {
+    inputModes: ["audio"],
+    outputModes: ["text"],
+    hint: "音频 -> 文本",
+  },
+  tts: {
+    inputModes: ["text"],
+    outputModes: ["audio"],
+    hint: "文本 -> 音频",
+  },
+};
+
+const resolveCategories = (category: ModelCategory, categories?: ModelCategory[]) =>
+  Array.from(new Set((categories?.length ? categories : [category]) as ModelCategory[]));
+const hasCategory = (values: ModelCategory[], target: ModelCategory) => values.includes(target);
+const toggleCategory = (values: ModelCategory[], target: ModelCategory) => {
+  if (hasCategory(values, target)) {
+    return values.length === 1 ? values : values.filter((item) => item !== target);
+  }
+  return [...values, target];
+};
+const formatCategories = (values: ModelCategory[]) =>
+  values.map((item) => categoryLabelByValue[item]).join(" + ");
+const recommendedModesForCategories = (categories: ModelCategory[]) => ({
+  inputModes: uniqueModes(categories.flatMap((item) => categoryPresetByValue[item].inputModes)),
+  outputModes: uniqueModes(categories.flatMap((item) => categoryPresetByValue[item].outputModes)),
+});
+const applyCategoryPresets = (
+  capabilities: ModelCapabilities,
+  categories: ModelCategory[],
+): ModelCapabilities => {
+  const recommended = recommendedModesForCategories(categories);
+  return {
+    ...capabilities,
+    inputModes: uniqueModes([...recommended.inputModes, ...capabilities.inputModes]),
+    outputModes: uniqueModes([...recommended.outputModes, ...capabilities.outputModes]),
+  };
+};
+const describeCategoryPresets = (categories: ModelCategory[]) =>
+  categories
+    .map((item) => `${categoryLabelByValue[item]}：${categoryPresetByValue[item].hint}`)
+    .join(" · ");
+
+function ModeSelector({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  return (
+    <div className="mode-select-panel">
+      <span className="mode-select-label">{label}</span>
+      <div className="mode-toggle-grid">
+        {commonModeOptions.map((option) => (
+          <button
+            className={hasMode(value, option.value) ? "mode-toggle active" : "mode-toggle"}
+            key={`${label}-${option.value}`}
+            onClick={() => onChange(toggleMode(value, option.value))}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <label>
+        其他模态（逗号分隔，可选）
+        <input
+          onChange={(event) => onChange(syncCustomModes(value, event.target.value))}
+          placeholder="例如：depth, sensor"
+          value={joinModes(extractCustomModes(value))}
+        />
+      </label>
+    </div>
+  );
+}
+
+function CategorySelector({
+  value,
+  onChange,
+}: {
+  value: ModelCategory[];
+  onChange: (value: ModelCategory[]) => void;
+}) {
+  return (
+    <div className="mode-select-panel">
+      <span className="mode-select-label">模型类型（可多选）</span>
+      <div className="category-toggle-grid">
+        {categoryOptions.map((option) => (
+          <button
+            className={hasCategory(value, option.value) ? "category-toggle active" : "category-toggle"}
+            key={option.value}
+            onClick={() => onChange(toggleCategory(value, option.value))}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ModelForm({
   title,
   value,
   providers,
   onChange,
+  showTitle = true,
 }: {
   title: string;
   value: CreateModelRequest | UpdateModelRequest;
   providers: ProviderConfig[];
   onChange: (value: CreateModelRequest | UpdateModelRequest) => void;
+  showTitle?: boolean;
 }) {
   const useCustomProvider = value.customProvider !== null;
+  const resolvedCategories = resolveCategories(value.category, value.categories);
 
   return (
     <>
-      <h3>{title}</h3>
+      {showTitle && <h3>{title}</h3>}
       <div className="field-grid">
         <label>
           模型名称
@@ -107,21 +274,17 @@ function ModelForm({
       </div>
 
       <div className="field-grid">
-        <label>
-          模型类型
-          <select
-            onChange={(event) =>
-              onChange({ ...value, category: event.target.value as ModelCategory })
-            }
-            value={value.category}
-          >
-            {categoryOptions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <CategorySelector
+          onChange={(nextCategories) => {
+            onChange({
+              ...value,
+              category: nextCategories[0],
+              categories: nextCategories,
+              capabilities: applyCategoryPresets(value.capabilities, nextCategories),
+            });
+          }}
+          value={resolvedCategories}
+        />
 
         <label className="inline-check">
           <input
@@ -146,6 +309,10 @@ function ModelForm({
           使用自定义 Provider
         </label>
       </div>
+
+      <small className="hint">
+        推荐预设：{describeCategoryPresets(resolvedCategories)}。切换类型时会补齐推荐模态，不会删除你已手动设置的能力。
+      </small>
 
       {useCustomProvider ? (
         <div className="field-grid">
@@ -207,37 +374,33 @@ function ModelForm({
       )}
 
       <div className="field-grid">
-        <label>
-          输入模态（逗号分隔）
-          <input
-            onChange={(event) =>
-              onChange({
-                ...value,
-                capabilities: {
-                  ...value.capabilities,
-                  inputModes: splitModes(event.target.value),
-                },
-              })
-            }
-            value={joinModes(value.capabilities.inputModes)}
-          />
-        </label>
+        <ModeSelector
+          label="输入模态"
+          onChange={(nextModes) =>
+            onChange({
+              ...value,
+              capabilities: {
+                ...value.capabilities,
+                inputModes: nextModes,
+              },
+            })
+          }
+          value={value.capabilities.inputModes}
+        />
 
-        <label>
-          输出模态（逗号分隔）
-          <input
-            onChange={(event) =>
-              onChange({
-                ...value,
-                capabilities: {
-                  ...value.capabilities,
-                  outputModes: splitModes(event.target.value),
-                },
-              })
-            }
-            value={joinModes(value.capabilities.outputModes)}
-          />
-        </label>
+        <ModeSelector
+          label="输出模态"
+          onChange={(nextModes) =>
+            onChange({
+              ...value,
+              capabilities: {
+                ...value.capabilities,
+                outputModes: nextModes,
+              },
+            })
+          }
+          value={value.capabilities.outputModes}
+        />
       </div>
 
       <div className="field-grid">
@@ -376,9 +539,13 @@ export function ModelSettings({
 }: Props) {
   const [createForm, setCreateForm] = useState<CreateModelRequest>(defaultCreateForm);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, UpdateModelRequest>>({});
   const [probing, setProbing] = useState<Record<string, boolean>>({});
   const [probeResults, setProbeResults] = useState<Record<string, ProbeModelConnectionResponse>>({});
+  const providerNameById = Object.fromEntries(providers.map((provider) => [provider.id, provider.displayName]));
+  const editingModel = models.find((model) => model.id === editingModelId) ?? null;
+  const editingDraft = editingModelId ? drafts[editingModelId] : undefined;
 
   useEffect(() => {
     const next: Record<string, UpdateModelRequest> = {};
@@ -396,109 +563,180 @@ export function ModelSettings({
   return (
     <section className="panel">
       <header className="panel-header">
-        <h2>模型设置</h2>
-        <button
-          className="primary"
-          onClick={() => setShowCreate((current) => !current)}
-          type="button"
-        >
-          {showCreate ? "收起新增" : "新增"}
-        </button>
+        <div>
+          <h2>模型</h2>
+          <small className="hint">管理模型编排、能力声明和连通性校验。</small>
+        </div>
+        <div className="section-actions">
+          <button
+            className="primary"
+            onClick={() => setShowCreate(true)}
+            type="button"
+          >
+            新增
+          </button>
+        </div>
       </header>
 
       {showCreate && (
-        <article className="card">
-          <ModelForm
-            onChange={(value) => setCreateForm(value as CreateModelRequest)}
-            providers={providers}
-            title="新增模型"
-            value={createForm}
-          />
-          <button
-            className="primary"
-            disabled={saving}
-            onClick={async () => {
-              await onCreate(createForm);
-              setCreateForm(defaultCreateForm());
-              setShowCreate(false);
-            }}
-            type="button"
-          >
-            新建模型
-          </button>
-        </article>
+        <FormModal title="新增模型" onClose={() => setShowCreate(false)}>
+          <div className="stack">
+            <ModelForm
+              onChange={(value) => setCreateForm(value as CreateModelRequest)}
+              providers={providers}
+              showTitle={false}
+              title="新增模型"
+              value={createForm}
+            />
+            <div className="actions">
+              <button className="ghost" onClick={() => setShowCreate(false)} type="button">
+                取消
+              </button>
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={async () => {
+                  await onCreate(createForm);
+                  setCreateForm(defaultCreateForm());
+                  setShowCreate(false);
+                }}
+                type="button"
+              >
+                新建模型
+              </button>
+            </div>
+          </div>
+        </FormModal>
       )}
 
-      <div className="stack">
+      {editingModel && editingDraft && (
+        <FormModal title={`编辑模型：${editingModel.name}`} onClose={() => setEditingModelId(null)}>
+          <div className="stack">
+            <ModelForm
+              onChange={(value) =>
+                setDrafts((current) => ({
+                  ...current,
+                  [editingModel.id]: value as UpdateModelRequest,
+                }))
+              }
+              providers={providers}
+              showTitle={false}
+              title={`编辑模型：${editingModel.name}`}
+              value={editingDraft}
+            />
+            <div className="actions">
+              <button className="ghost" onClick={() => setEditingModelId(null)} type="button">
+                取消
+              </button>
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={async () => {
+                  await onUpdate(editingModel.id, editingDraft);
+                  setEditingModelId(null);
+                }}
+                type="button"
+              >
+                保存设置
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      <div className="settings-summary-list">
+        {models.length === 0 && (
+          <article className="card settings-summary-empty">
+            <p className="hint">还没有模型，先新增一个。</p>
+          </article>
+        )}
         {models.map((model) => {
-          const draft = drafts[model.id];
-          if (!draft) return null;
           const probeRunning = probing[model.id] ?? false;
           const probeResult = probeResults[model.id];
+          const sourceLabel = model.customProvider
+            ? "自定义 Provider"
+            : (model.providerRef ? providerNameById[model.providerRef] : null) ?? "未绑定 Provider";
+          const categories = resolveCategories(model.category, model.categories);
           return (
-            <article className="card" key={model.id}>
-              <ModelForm
-                onChange={(value) =>
-                  setDrafts((current) => ({
-                    ...current,
-                    [model.id]: value as UpdateModelRequest,
-                  }))
-                }
-                providers={providers}
-                title={`编辑模型：${model.name}`}
-                value={draft}
-              />
-              <div className="actions">
-                <button
-                  className="ghost"
-                  disabled={saving || probeRunning}
-                  onClick={async () => {
-                    setProbing((current) => ({ ...current, [model.id]: true }));
-                    try {
-                      const result = await onProbe({ modelRefId: model.id });
-                      setProbeResults((current) => ({ ...current, [model.id]: result }));
-                    } catch (error) {
-                      const message =
-                        typeof error === "object" &&
-                        error !== null &&
-                        "message" in error &&
-                        typeof (error as Record<string, unknown>).message === "string"
-                          ? ((error as Record<string, unknown>).message as string)
-                          : "探测失败";
-                      setProbeResults((current) => ({
-                        ...current,
-                        [model.id]: {
-                          modelRefId: model.id,
-                          modelId: model.modelId,
-                          reachable: false,
-                          latencyMs: 0,
-                          detail: message,
-                        },
-                      }));
-                    } finally {
-                      setProbing((current) => ({ ...current, [model.id]: false }));
-                    }
-                  }}
-                  type="button"
-                >
-                  {probeRunning ? "探测中..." : "连通测试"}
-                </button>
-                <button
-                  className="primary"
-                  disabled={saving}
-                  onClick={() => onUpdate(model.id, draft)}
-                  type="button"
-                >
-                  保存
-                </button>
-                <button
-                  className="danger"
-                  disabled={saving}
-                  onClick={() => onDelete(model.id)}
-                  type="button"
-                >
-                  删除
-                </button>
+            <article className="card settings-summary-card" key={model.id}>
+              <div className="settings-summary-head">
+                <div className="settings-summary-copy">
+                  <h3>{model.name}</h3>
+                  <small>{model.modelId}</small>
+                </div>
+                <div className="settings-summary-tools">
+                  <span className={model.enabled ? "status-badge is-live" : "status-badge"}>
+                    {model.enabled ? "已启用" : "已停用"}
+                  </span>
+                  <div className="settings-summary-actions">
+                    <ActionIconButton
+                      busy={probeRunning}
+                      disabled={saving || probeRunning}
+                      icon="probe"
+                      label={probeRunning ? "探测中" : "连通测试"}
+                      onClick={async () => {
+                        setProbing((current) => ({ ...current, [model.id]: true }));
+                        try {
+                          const result = await onProbe({ modelRefId: model.id });
+                          setProbeResults((current) => ({ ...current, [model.id]: result }));
+                        } catch (error) {
+                          const message =
+                            typeof error === "object" &&
+                            error !== null &&
+                            "message" in error &&
+                            typeof (error as Record<string, unknown>).message === "string"
+                              ? ((error as Record<string, unknown>).message as string)
+                              : "探测失败";
+                          setProbeResults((current) => ({
+                            ...current,
+                            [model.id]: {
+                              modelRefId: model.id,
+                              modelId: model.modelId,
+                              reachable: false,
+                              latencyMs: 0,
+                              detail: message,
+                            },
+                          }));
+                        } finally {
+                          setProbing((current) => ({ ...current, [model.id]: false }));
+                        }
+                      }}
+                      tone="ghost"
+                      type="button"
+                    />
+                    <ActionIconButton
+                      icon="edit"
+                      label="编辑设置"
+                      onClick={() => setEditingModelId(model.id)}
+                      tone="primary"
+                      type="button"
+                    />
+                    <ActionIconButton
+                      disabled={saving}
+                      icon="delete"
+                      label="删除"
+                      onClick={() => onDelete(model.id)}
+                      tone="danger"
+                      type="button"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="settings-summary-meta">
+                <span className="settings-summary-pill">{formatCategories(categories)}</span>
+                <span className="settings-summary-pill">{sourceLabel}</span>
+                <span className="settings-summary-pill" title={formatModes(model.capabilities.inputModes)}>
+                  输入：{formatModes(model.capabilities.inputModes)}
+                </span>
+                <span className="settings-summary-pill" title={formatModes(model.capabilities.outputModes)}>
+                  输出：{formatModes(model.capabilities.outputModes)}
+                </span>
+                {model.capabilities.supportsStreaming && (
+                  <span className="settings-summary-pill">流式</span>
+                )}
+                {model.capabilities.supportsFunctionCall && (
+                  <span className="settings-summary-pill">函数调用</span>
+                )}
               </div>
               {probeResult && (
                 <small className={probeResult.reachable ? "hint" : "error-inline"}>

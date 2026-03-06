@@ -2,12 +2,14 @@ use std::sync::Arc;
 
 use girlagent_core::{
     AppResult, AppService, ChatMessage, ChatSession, ChatWithAgentRequest, ChatWithAgentResponse,
-    CreateAgentRequest, CreateModelRequest, CreateProviderRequest, ErrorPayload,
-    OpenAICompatChatGateway, RegenerateChatReplyRequest, RewriteChatUserMessageRequest,
-    RewriteLastUserMessageRequest, RuntimeStatusResponse, ProbeModelConnectionRequest,
-    ProbeModelConnectionResponse, ProbeProviderConnectionRequest, ProbeProviderConnectionResponse,
+    ChatWithSessionRequest, ChatWithSessionResponse, CreateAgentRequest, CreateModelRequest,
+    CreateProviderRequest, CreateWorkspaceChatSessionRequest, ErrorPayload,
+    OpenAICompatChatGateway, ProbeModelConnectionRequest, ProbeModelConnectionResponse,
+    ProbeProviderConnectionRequest, ProbeProviderConnectionResponse, RegenerateChatReplyRequest,
+    RewriteChatUserMessageRequest, RewriteLastUserMessageRequest, RuntimeStatusResponse,
     SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse, UpdateAgentRequest,
-    UpdateModelRequest, UpdateProviderRequest,
+    UpdateModelRequest, UpdateProviderRequest, UpdateWorkspaceChatSessionRequest,
+    WorkspaceChatMessage, WorkspaceChatSession,
 };
 use tauri::State;
 
@@ -29,7 +31,7 @@ fn database_url() -> String {
 
 #[tauri::command]
 fn ping(message: String) -> String {
-    format!("少女智能体 backend received: {message}")
+    format!("Girl-AI-Agent backend received: {message}")
 }
 
 #[tauri::command]
@@ -150,6 +152,72 @@ async fn update_agent(
 #[tauri::command]
 async fn delete_agent(state: State<'_, AppState>, id: String) -> CommandResult<()> {
     map_command_result(state.service.delete_agent(&id).await)
+}
+
+#[tauri::command]
+async fn list_workspace_chat_sessions(
+    state: State<'_, AppState>,
+) -> CommandResult<Vec<WorkspaceChatSession>> {
+    map_command_result(state.service.list_workspace_chat_sessions().await)
+}
+
+#[tauri::command]
+async fn create_workspace_chat_session(
+    state: State<'_, AppState>,
+    input: CreateWorkspaceChatSessionRequest,
+) -> CommandResult<WorkspaceChatSession> {
+    map_command_result(state.service.create_workspace_chat_session(input).await)
+}
+
+#[tauri::command]
+async fn update_workspace_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+    input: UpdateWorkspaceChatSessionRequest,
+) -> CommandResult<WorkspaceChatSession> {
+    map_command_result(
+        state
+            .service
+            .update_workspace_chat_session(&session_id, input)
+            .await,
+    )
+}
+
+#[tauri::command]
+async fn delete_workspace_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    map_command_result(state.service.delete_workspace_chat_session(&session_id).await)
+}
+
+#[tauri::command]
+async fn list_workspace_chat_messages(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<Vec<WorkspaceChatMessage>> {
+    map_command_result(state.service.list_workspace_chat_messages(&session_id).await)
+}
+
+#[tauri::command]
+async fn clear_workspace_chat_messages(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    map_command_result(state.service.clear_workspace_chat_messages(&session_id).await)
+}
+
+#[tauri::command]
+async fn chat_with_session(
+    state: State<'_, AppState>,
+    input: ChatWithSessionRequest,
+) -> CommandResult<ChatWithSessionResponse> {
+    map_command_result(
+        state
+            .service
+            .chat_with_session(&state.chat_gateway, input)
+            .await,
+    )
 }
 
 #[tauri::command]
@@ -370,7 +438,7 @@ async fn clear_chat_session_messages(
 pub fn run() {
     let store = tauri::async_runtime::block_on(SqliteStore::connect(&database_url()))
         .expect("failed to initialize sqlite store");
-    let service = AppService::new(Arc::new(store), "少女智能体", "0.1.0");
+    let service = AppService::new(Arc::new(store), "Girl-AI-Agent", "0.1.0");
 
     tauri::Builder::default()
         .manage(AppState {
@@ -395,6 +463,13 @@ pub fn run() {
             create_agent,
             update_agent,
             delete_agent,
+            list_workspace_chat_sessions,
+            create_workspace_chat_session,
+            update_workspace_chat_session,
+            delete_workspace_chat_session,
+            list_workspace_chat_messages,
+            clear_workspace_chat_messages,
+            chat_with_session,
             chat_with_agent,
             regenerate_chat_reply,
             undo_last_chat_turn,
@@ -414,5 +489,5 @@ pub fn run() {
             clear_chat_session_messages
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run GirlAgent");
+        .expect("failed to run Girl-AI-Agent");
 }

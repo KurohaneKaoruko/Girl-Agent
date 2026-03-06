@@ -1,147 +1,57 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type {
   AgentConfig,
   ApiError,
-  ChatMessage,
-  ChatSession,
-  ChatWithAgentRequest,
-  ChatWithAgentResponse,
-  RegenerateChatReplyRequest,
-  RewriteChatUserMessageRequest,
-  UndoLastChatTurnRequest,
-  UndoLastChatTurnResponse,
+  ChatWithSessionRequest,
+  CreateWorkspaceChatSessionRequest,
+  UpdateWorkspaceChatSessionRequest,
+  WorkspaceChatMessage,
+  WorkspaceChatParticipant,
+  WorkspaceChatParticipantMode,
+  WorkspaceChatReply,
+  WorkspaceChatSession,
 } from "@/types";
+import { FormModal } from "@/components/FormModal";
+import { describeApiError } from "@/lib/errorDisplay";
 
 type Props = {
   agents: AgentConfig[];
-  focusedAgentId?: string | null;
   disabled: boolean;
-  onChat: (input: ChatWithAgentRequest) => Promise<ChatWithAgentResponse>;
-  onChatStream: (
-    input: ChatWithAgentRequest,
-    onDelta: (chunk: string) => void,
+  onListSessions: () => Promise<WorkspaceChatSession[]>;
+  onCreateSession: (input: CreateWorkspaceChatSessionRequest) => Promise<WorkspaceChatSession>;
+  onUpdateSession: (
+    sessionId: string,
+    input: UpdateWorkspaceChatSessionRequest,
+  ) => Promise<WorkspaceChatSession>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
+  onListMessages: (sessionId: string) => Promise<WorkspaceChatMessage[]>;
+  onClearMessages: (sessionId: string) => Promise<void>;
+  onOpenAgentSettings: () => void;
+  onSendMessageStream: (
+    input: ChatWithSessionRequest,
+    onReplyStart: (reply: Omit<WorkspaceChatReply, "message">) => void,
+    onDelta: (agentId: string, chunk: string) => void,
     signal?: AbortSignal,
-  ) => Promise<ChatWithAgentResponse>;
-  onRegenerate: (input: RegenerateChatReplyRequest) => Promise<ChatWithAgentResponse>;
-  onRegenerateStream: (
-    input: RegenerateChatReplyRequest,
-    onDelta: (chunk: string) => void,
-    signal?: AbortSignal,
-  ) => Promise<ChatWithAgentResponse>;
-  onRewriteUserMessage: (input: RewriteChatUserMessageRequest) => Promise<ChatWithAgentResponse>;
-  onUndoLastTurn: (input: UndoLastChatTurnRequest) => Promise<UndoLastChatTurnResponse>;
-  onListSessions: (agentId: string) => Promise<ChatSession[]>;
-  onCreateSession: (agentId: string, title: string) => Promise<ChatSession>;
-  onRenameSession: (agentId: string, sessionId: string, title: string) => Promise<ChatSession>;
-  onDuplicateSession: (agentId: string, sourceSessionId: string, title: string) => Promise<ChatSession>;
-  onSetSessionPinned: (agentId: string, sessionId: string, pinned: boolean) => Promise<ChatSession>;
-  onSetSessionArchived: (agentId: string, sessionId: string, archived: boolean) => Promise<ChatSession>;
-  onSetSessionTags: (agentId: string, sessionId: string, tags: string[]) => Promise<ChatSession>;
-  onDeleteSession: (agentId: string, sessionId: string) => Promise<void>;
-  onLoadSessionMessages: (agentId: string, sessionId: string) => Promise<ChatMessage[]>;
-  onClearSessionMessages: (agentId: string, sessionId: string) => Promise<void>;
+  ) => Promise<unknown>;
 };
 
-const CHAT_WINDOW_PREF_KEY = "girlagent.chat.windowPrefs.v1";
-
-type AgentChatWindow = {
-  sessions: ChatSession[];
-  selectedSessionId: string;
-  sessionSearch: string;
-  sessionFilter: "all" | "active" | "archived";
-  sessionOnlyPinned: boolean;
-  messages: ChatMessage[];
-  input: string;
-  temperature: string;
-  maxTokens: string;
-  topP: string;
-  frequencyPenalty: string;
-  streamingEnabled: boolean;
-  regenerateReplaceLastAssistant: boolean;
-  lastModelId: string;
-  sending: boolean;
-  streaming: boolean;
-  rewriting: boolean;
-  undoing: boolean;
-  loadingSessions: boolean;
-  loadingMessages: boolean;
-  clearing: boolean;
-  exportingAll: boolean;
-  highlightedMessageIndexes: number[];
-  highlightToken: number;
-  error: ApiError | null;
+type ParticipantDraft = {
+  agentId: string;
+  enabled: boolean;
+  receiveMode: WorkspaceChatParticipantMode;
+  replyMode: WorkspaceChatParticipantMode;
 };
 
-type WindowPreference = {
-  selectedSessionId?: string;
-  sessionSearch?: string;
-  sessionFilter?: "all" | "active" | "archived";
-  sessionOnlyPinned?: boolean;
-  input?: string;
-  temperature?: string;
-  maxTokens?: string;
-  topP?: string;
-  frequencyPenalty?: string;
-  streamingEnabled?: boolean;
-  regenerateReplaceLastAssistant?: boolean;
-};
-
-const loadPreferences = (): Record<string, WindowPreference> => {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  try {
-    const raw = window.localStorage.getItem(CHAT_WINDOW_PREF_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, WindowPreference>;
-    return typeof parsed === "object" && parsed !== null ? parsed : {};
-  } catch {
-    return {};
-  }
-};
-
-const createEmptyWindow = (preference?: WindowPreference): AgentChatWindow => ({
-  sessions: [],
-  selectedSessionId: preference?.selectedSessionId ?? "",
-  sessionSearch: preference?.sessionSearch ?? "",
-  sessionFilter: preference?.sessionFilter ?? "active",
-  sessionOnlyPinned: preference?.sessionOnlyPinned ?? false,
-  messages: [],
-  input: preference?.input ?? "",
-  temperature: preference?.temperature ?? "",
-  maxTokens: preference?.maxTokens ?? "",
-  topP: preference?.topP ?? "",
-  frequencyPenalty: preference?.frequencyPenalty ?? "",
-  streamingEnabled: preference?.streamingEnabled ?? true,
-  regenerateReplaceLastAssistant: preference?.regenerateReplaceLastAssistant ?? true,
-  lastModelId: "",
-  sending: false,
-  streaming: false,
-  rewriting: false,
-  undoing: false,
-  loadingSessions: true,
-  loadingMessages: false,
-  clearing: false,
-  exportingAll: false,
-  highlightedMessageIndexes: [],
-  highlightToken: 0,
-  error: null,
-});
-
-const parseOptionalNumber = (raw: string): number | null => {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : null;
+type SessionDraft = {
+  title: string;
+  isPinned: boolean;
+  isArchived: boolean;
+  tags: string;
+  participants: ParticipantDraft[];
 };
 
 const toApiError = (error: unknown): ApiError => {
-  if (typeof error === "object" && error !== null) {
-    const payload = error as { code?: unknown; name?: unknown; message?: unknown };
-    if (payload.code === "STREAM_ABORTED" || payload.name === "AbortError") {
-      return { code: "STREAM_ABORTED", message: "已停止生成" };
-    }
-  }
   if (typeof error === "object" && error !== null) {
     const payload = error as Record<string, unknown>;
     if (typeof payload.code === "string" && typeof payload.message === "string") {
@@ -158,9 +68,6 @@ const toApiError = (error: unknown): ApiError => {
   return { code: "INTERNAL_ERROR", message: "Unknown chat error" };
 };
 
-const pickDefaultSessionId = (sessions: ChatSession[]): string =>
-  sessions.find((item) => item.isDefault)?.id ?? sessions[0]?.id ?? "";
-
 const formatDateTime = (raw: string): string => {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) {
@@ -175,992 +82,443 @@ const formatDateTime = (raw: string): string => {
   });
 };
 
-const formatSessionFileName = (agentName: string, sessionTitle: string): string =>
-  `${agentName}-${sessionTitle}`
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, "_")
-    .slice(0, 64) || "chat-session";
+const createSessionDraft = (
+  agents: AgentConfig[],
+  session?: WorkspaceChatSession | null,
+): SessionDraft => ({
+  title: session?.title ?? "",
+  isPinned: session?.isPinned ?? false,
+  isArchived: session?.isArchived ?? false,
+  tags: session?.tags.join(", ") ?? "",
+  participants: agents.map((agent) => {
+    const matched = session?.participants.find((item) => item.agentId === agent.id);
+    return {
+      agentId: agent.id,
+      enabled: Boolean(matched),
+      receiveMode: matched?.receiveMode ?? "all",
+      replyMode: matched?.replyMode ?? "all",
+    };
+  }),
+});
+
+const buildParticipantPayload = (draft: SessionDraft): WorkspaceChatParticipant[] =>
+  draft.participants
+    .filter((item) => item.enabled)
+    .map((item, index) => ({
+      agentId: item.agentId,
+      receiveMode: item.receiveMode,
+      replyMode: item.replyMode,
+      sortOrder: index,
+    }));
+
+const modeOptions: Array<{ value: WorkspaceChatParticipantMode; label: string }> = [
+  { value: "all", label: "全消息" },
+  { value: "mention", label: "仅 @" },
+];
 
 export function ChatWorkspace({
   agents,
-  focusedAgentId = null,
   disabled,
-  onChat,
-  onChatStream,
-  onRegenerate,
-  onRegenerateStream,
-  onRewriteUserMessage,
-  onUndoLastTurn,
   onListSessions,
   onCreateSession,
-  onRenameSession,
-  onDuplicateSession,
-  onSetSessionPinned,
-  onSetSessionArchived,
-  onSetSessionTags,
+  onUpdateSession,
   onDeleteSession,
-  onLoadSessionMessages,
-  onClearSessionMessages,
+  onListMessages,
+  onClearMessages,
+  onOpenAgentSettings,
+  onSendMessageStream,
 }: Props) {
-  const [windows, setWindows] = useState<Record<string, AgentChatWindow>>({});
-  const windowsRef = useRef<Record<string, AgentChatWindow>>({});
-  const initializedRef = useRef<Set<string>>(new Set());
-  const sessionLoadTokenRef = useRef<Record<string, number>>({});
-  const messageLoadRef = useRef<Record<string, string>>({});
-  const chatLogRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const preferencesRef = useRef<Record<string, WindowPreference>>(loadPreferences());
-  const streamAbortRef = useRef<Record<string, AbortController | null>>({});
+  const [sessions, setSessions] = useState<WorkspaceChatSession[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState("");
+  const [messages, setMessages] = useState<WorkspaceChatMessage[]>([]);
+  const [composer, setComposer] = useState("");
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [createDraft, setCreateDraft] = useState<SessionDraft>(() => createSessionDraft(agents));
+  const [settingsDraft, setSettingsDraft] = useState<SessionDraft>(() => createSessionDraft(agents));
+  const [error, setError] = useState<ApiError | null>(null);
+  const [notice, setNotice] = useState("");
+  const activeStreamRef = useRef<AbortController | null>(null);
+  const dragAgentIdRef = useRef<string | null>(null);
+  const errorDisplay = error ? describeApiError(error) : null;
 
-  const beginStream = (agentId: string) => {
-    const previous = streamAbortRef.current[agentId];
-    if (previous) {
-      previous.abort();
-    }
-    const next = new AbortController();
-    streamAbortRef.current[agentId] = next;
-    return next;
-  };
+  const agentNameById = useMemo(
+    () => Object.fromEntries(agents.map((agent) => [agent.id, agent.name])),
+    [agents],
+  );
+  const selectedSession = sessions.find((item) => item.id === selectedSessionId) ?? null;
 
-  const finishStream = (agentId: string, controller: AbortController) => {
-    if (streamAbortRef.current[agentId] === controller) {
-      streamAbortRef.current[agentId] = null;
-    }
-  };
-
-  const updateWindow = (agentId: string, patch: Partial<AgentChatWindow>) => {
-    setWindows((current) => {
-      const window = current[agentId] ?? createEmptyWindow(preferencesRef.current[agentId]);
-      return {
-        ...current,
-        [agentId]: {
-          ...window,
-          ...patch,
-        },
-      };
-    });
-  };
-
-  const collectRewriteHighlightIndexes = (messages: ChatMessage[], targetUserOffset: number): number[] => {
-    const userIndexes = messages
-      .map((message, index) => (message.role === "user" ? index : -1))
-      .filter((index) => index >= 0);
-    const targetPosition = userIndexes.length - 1 - targetUserOffset;
-    if (targetPosition < 0 || targetPosition >= userIndexes.length) {
-      return [];
-    }
-    const targetUserIndex = userIndexes[targetPosition];
-    let targetAssistantIndex = -1;
-    for (let index = targetUserIndex + 1; index < messages.length; index += 1) {
-      if (messages[index].role === "assistant") {
-        targetAssistantIndex = index;
-        break;
-      }
-      if (messages[index].role === "user") {
-        break;
-      }
-    }
-    return targetAssistantIndex >= 0 ? [targetUserIndex, targetAssistantIndex] : [targetUserIndex];
-  };
-
-  const scheduleMessageHighlight = (agentId: string, indexes: number[]) => {
-    const deduped = [...new Set(indexes.filter((index) => index >= 0))];
-    if (deduped.length === 0) {
-      return;
-    }
-    const token = Date.now() + Math.random();
-    updateWindow(agentId, {
-      highlightedMessageIndexes: deduped,
-      highlightToken: token,
-    });
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.setTimeout(() => {
-      setWindows((current) => {
-        const state = current[agentId];
-        if (!state || state.highlightToken !== token) {
-          return current;
-        }
-        return {
-          ...current,
-          [agentId]: {
-            ...state,
-            highlightedMessageIndexes: [],
-          },
-        };
+  const loadSessions = async (preferredSessionId?: string) => {
+    setLoadingSessions(true);
+    try {
+      const nextSessions = await onListSessions();
+      setSessions(nextSessions);
+      setSelectedSessionId((current) => {
+        const candidate =
+          nextSessions.find((item) => item.id === preferredSessionId)?.id ??
+          nextSessions.find((item) => item.id === current)?.id ??
+          nextSessions[0]?.id ??
+          "";
+        return candidate;
       });
-    }, 3200);
+      setError(null);
+    } catch (rawError) {
+      setError(toApiError(rawError));
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  const loadMessages = async (sessionId: string) => {
+    if (!sessionId) {
+      setMessages([]);
+      return;
+    }
+    setLoadingMessages(true);
+    try {
+      setMessages(await onListMessages(sessionId));
+      setError(null);
+    } catch (rawError) {
+      setError(toApiError(rawError));
+    } finally {
+      setLoadingMessages(false);
+    }
   };
 
   useEffect(() => {
-    windowsRef.current = windows;
-  }, [windows]);
-
-  useEffect(() => {
-    return () => {
-      for (const controller of Object.values(streamAbortRef.current)) {
-        controller?.abort();
-      }
-      streamAbortRef.current = {};
-    };
+    void loadSessions();
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const nextPreferences: Record<string, WindowPreference> = {};
-    for (const [agentId, state] of Object.entries(windows)) {
-      nextPreferences[agentId] = {
-        selectedSessionId: state.selectedSessionId,
-        sessionSearch: state.sessionSearch,
-        sessionFilter: state.sessionFilter,
-        sessionOnlyPinned: state.sessionOnlyPinned,
-        input: state.input,
-        temperature: state.temperature,
-        maxTokens: state.maxTokens,
-        topP: state.topP,
-        frequencyPenalty: state.frequencyPenalty,
-        streamingEnabled: state.streamingEnabled,
-        regenerateReplaceLastAssistant: state.regenerateReplaceLastAssistant,
-      };
-    }
-    preferencesRef.current = nextPreferences;
-    window.localStorage.setItem(CHAT_WINDOW_PREF_KEY, JSON.stringify(nextPreferences));
-  }, [windows]);
+    setCreateDraft(createSessionDraft(agents));
+    setSettingsDraft(createSessionDraft(agents, selectedSession));
+  }, [agents, selectedSession]);
 
   useEffect(() => {
-    for (const agent of agents) {
-      const log = chatLogRefs.current[agent.id];
-      if (!log) continue;
-      log.scrollTop = log.scrollHeight;
-    }
-  }, [agents, windows]);
-
-  const loadMessages = async (agentId: string, sessionId: string): Promise<ChatMessage[] | null> => {
-    messageLoadRef.current[agentId] = sessionId;
-    updateWindow(agentId, { loadingMessages: true, error: null });
-    try {
-      const messages = await onLoadSessionMessages(agentId, sessionId);
-      if (messageLoadRef.current[agentId] !== sessionId) {
-        return null;
-      }
-      updateWindow(agentId, {
-        messages,
-        selectedSessionId: sessionId,
-        loadingMessages: false,
-      });
-      return messages;
-    } catch (rawError) {
-      if (messageLoadRef.current[agentId] !== sessionId) {
-        return null;
-      }
-      updateWindow(agentId, {
-        loadingMessages: false,
-        error: toApiError(rawError),
-      });
-      return null;
-    }
-  };
-
-  const loadSessions = async (agentId: string, preferredSessionId?: string) => {
-    const token = Date.now() + Math.random();
-    sessionLoadTokenRef.current[agentId] = token;
-    updateWindow(agentId, { loadingSessions: true, error: null });
-    try {
-      const sessions = await onListSessions(agentId);
-      if (sessionLoadTokenRef.current[agentId] !== token) {
-        return;
-      }
-      const currentWindow = windowsRef.current[agentId] ?? createEmptyWindow(preferencesRef.current[agentId]);
-      const persistedSessionId = preferencesRef.current[agentId]?.selectedSessionId;
-      const selectedSessionId =
-        sessions.find((item) => item.id === preferredSessionId)?.id ??
-        sessions.find((item) => item.id === currentWindow.selectedSessionId)?.id ??
-        sessions.find((item) => item.id === persistedSessionId)?.id ??
-        pickDefaultSessionId(sessions);
-
-      updateWindow(agentId, {
-        sessions,
-        selectedSessionId,
-        loadingSessions: false,
-      });
-
-      if (selectedSessionId) {
-        await loadMessages(agentId, selectedSessionId);
-      } else {
-        updateWindow(agentId, { messages: [] });
-      }
-    } catch (rawError) {
-      if (sessionLoadTokenRef.current[agentId] !== token) {
-        return;
-      }
-      updateWindow(agentId, {
-        loadingSessions: false,
-        error: toApiError(rawError),
-      });
-    }
-  };
-
-  useEffect(() => {
-    setWindows((current) => {
-      const next: Record<string, AgentChatWindow> = {};
-      for (const agent of agents) {
-        next[agent.id] = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-      }
-      return next;
-    });
-
-    const currentIds = new Set(agents.map((agent) => agent.id));
-    for (const id of Array.from(initializedRef.current)) {
-      if (!currentIds.has(id)) {
-        initializedRef.current.delete(id);
-      }
-    }
-    for (const [id, controller] of Object.entries(streamAbortRef.current)) {
-      if (!currentIds.has(id)) {
-        controller?.abort();
-        delete streamAbortRef.current[id];
-      }
-    }
-
-    for (const agent of agents) {
-      if (initializedRef.current.has(agent.id)) continue;
-      initializedRef.current.add(agent.id);
-      void loadSessions(agent.id);
-    }
-  }, [agents]);
-
-  const createSession = async (agentId: string) => {
-    const defaultTitle = `新会话 ${new Date().toLocaleString("zh-CN", {
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    })}`;
-    const title = window.prompt("输入新会话名称", defaultTitle);
-    if (!title || !title.trim()) return;
-    try {
-      const created = await onCreateSession(agentId, title.trim());
-      await loadSessions(agentId, created.id);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const renameSession = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    if (!state.selectedSessionId) return;
-    const current = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!current || current.isDefault) return;
-
-    const title = window.prompt("输入新会话名称", current.title);
-    if (!title || !title.trim()) return;
-    try {
-      const renamed = await onRenameSession(agentId, state.selectedSessionId, title.trim());
-      await loadSessions(agentId, renamed.id);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const duplicateSession = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    if (!state.selectedSessionId) return;
-    const source = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!source) return;
-
-    const title = window.prompt("输入副本会话名称", `${source.title} - 副本`);
-    if (!title || !title.trim()) return;
-    try {
-      const duplicated = await onDuplicateSession(agentId, source.id, title.trim());
-      await loadSessions(agentId, duplicated.id);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const toggleSessionPinned = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    const current = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!current) return;
-    try {
-      const updated = await onSetSessionPinned(agentId, current.id, !current.isPinned);
-      await loadSessions(agentId, updated.id);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const toggleSessionArchived = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    const current = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!current) return;
-    try {
-      const updated = await onSetSessionArchived(agentId, current.id, !current.isArchived);
-      await loadSessions(agentId, updated.id);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const editSessionTags = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    const current = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!current) return;
-    const initial = current.tags.join(", ");
-    const raw = window.prompt("输入标签（逗号分隔）", initial);
-    if (raw === null) return;
-    const tags = raw
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-    try {
-      const updated = await onSetSessionTags(agentId, current.id, tags);
-      await loadSessions(agentId, updated.id);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const deleteSession = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    if (!state.selectedSessionId) return;
-    const current = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!current || current.isDefault) return;
-
-    if (!window.confirm(`删除会话「${current.title}」？`)) return;
-    try {
-      await onDeleteSession(agentId, current.id);
-      await loadSessions(agentId);
-    } catch (rawError) {
-      updateWindow(agentId, { error: toApiError(rawError) });
-    }
-  };
-
-  const clearMessages = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    if (!state.selectedSessionId) return;
-
-    updateWindow(agentId, { clearing: true, error: null });
-    try {
-      await onClearSessionMessages(agentId, state.selectedSessionId);
-      updateWindow(agentId, {
-        messages: [],
-        lastModelId: "",
-        clearing: false,
-        error: null,
-      });
-      void loadSessions(agentId, state.selectedSessionId);
-    } catch (rawError) {
-      updateWindow(agentId, { clearing: false, error: toApiError(rawError) });
-    }
-  };
-
-  const refreshSessions = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    await loadSessions(agentId, state.selectedSessionId || undefined);
-  };
-
-  const stopStreaming = (agentId: string) => {
-    const controller = streamAbortRef.current[agentId];
-    if (!controller) {
+    if (!selectedSessionId) {
+      setMessages([]);
       return;
     }
-    controller.abort();
-    streamAbortRef.current[agentId] = null;
-    updateWindow(agentId, {
-      sending: false,
-      streaming: false,
-      error: null,
-    });
+    void loadMessages(selectedSessionId);
+  }, [selectedSessionId]);
+
+  const updateDraftParticipant = (
+    setter: Dispatch<SetStateAction<SessionDraft>>,
+    agentId: string,
+    patch: Partial<ParticipantDraft>,
+  ) => {
+    setter((current) => ({
+      ...current,
+      participants: current.participants.map((item) =>
+        item.agentId === agentId ? { ...item, ...patch } : item,
+      ),
+    }));
   };
 
-  const exportSession = (agent: AgentConfig, state: AgentChatWindow) => {
-    const session = state.sessions.find((item) => item.id === state.selectedSessionId);
-    if (!session) return;
-
-    const lines: string[] = [];
-    lines.push(`# ${agent.name} · ${session.title}`);
-    lines.push("");
-    lines.push(`- 会话 ID: ${session.id}`);
-    lines.push(`- 导出时间: ${new Date().toLocaleString("zh-CN", { hour12: false })}`);
-    lines.push("");
-
-    for (const message of state.messages) {
-      const speaker =
-        message.role === "assistant"
-          ? agent.name
-          : message.role === "user"
-            ? "你"
-            : message.role;
-      lines.push(`## ${speaker}`);
-      lines.push("");
-      lines.push(message.content);
-      lines.push("");
+  const moveDraftParticipant = (
+    setter: Dispatch<SetStateAction<SessionDraft>>,
+    sourceAgentId: string,
+    targetAgentId: string,
+  ) => {
+    if (sourceAgentId === targetAgentId) {
+      return;
     }
-
-    const markdown = lines.join("\n");
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${formatSessionFileName(agent.name, session.title)}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportAllSessions = async (agent: AgentConfig, state: AgentChatWindow) => {
-    if (state.exportingAll) return;
-    updateWindow(agent.id, { exportingAll: true, error: null });
-    try {
-      const sessions = [...state.sessions];
-      const lines: string[] = [];
-      lines.push(`# ${agent.name} · 全部会话导出`);
-      lines.push("");
-      lines.push(`- 导出时间: ${new Date().toLocaleString("zh-CN", { hour12: false })}`);
-      lines.push(`- 会话数量: ${sessions.length}`);
-      lines.push("");
-      lines.push("## 会话目录");
-      lines.push("");
-      for (const session of sessions) {
-        lines.push(
-          `- ${session.title} (${session.messageCount} 条, 更新时间 ${formatDateTime(session.updatedAt)})`,
-        );
+    setter((current) => {
+      const next = [...current.participants];
+      const sourceIndex = next.findIndex((item) => item.agentId === sourceAgentId);
+      const targetIndex = next.findIndex((item) => item.agentId === targetAgentId);
+      if (sourceIndex < 0 || targetIndex < 0) {
+        return current;
       }
-      lines.push("");
-
-      for (const session of sessions) {
-        const messages =
-          session.id === state.selectedSessionId
-            ? state.messages
-            : await onLoadSessionMessages(agent.id, session.id);
-        lines.push(`## ${session.title}`);
-        lines.push("");
-        lines.push(`- 会话 ID: ${session.id}`);
-        lines.push(`- 消息数: ${messages.length}`);
-        lines.push("");
-        for (const message of messages) {
-          const speaker =
-            message.role === "assistant" ? agent.name : message.role === "user" ? "你" : message.role;
-          lines.push(`### ${speaker}`);
-          lines.push("");
-          lines.push(message.content);
-          lines.push("");
-        }
-        lines.push("---");
-        lines.push("");
-      }
-
-      const markdown = lines.join("\n");
-      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${formatSessionFileName(agent.name, "all-sessions")}.md`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      updateWindow(agent.id, { exportingAll: false });
-    } catch (rawError) {
-      updateWindow(agent.id, { exportingAll: false, error: toApiError(rawError) });
-    }
-  };
-
-  const copyMessageContent = async (agentId: string, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content);
-    } catch {
-      updateWindow(agentId, {
-        error: { code: "COPY_FAILED", message: "复制失败：当前环境不支持剪贴板写入" },
-      });
-    }
-  };
-
-  const quoteMessageToInput = (agentId: string, content: string) => {
-    setWindows((current) => {
-      const state = current[agentId] ?? createEmptyWindow(preferencesRef.current[agentId]);
-      const quoted = content
-        .split("\n")
-        .map((line) => `> ${line}`)
-        .join("\n");
-      const nextInput = state.input.trim()
-        ? `${state.input.trimEnd()}\n\n${quoted}\n`
-        : `${quoted}\n`;
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
       return {
         ...current,
-        [agentId]: {
-          ...state,
-          input: nextInput,
-        },
+        participants: next,
       };
     });
   };
 
-  const buildRegenerateBaseMessages = (messages: ChatMessage[], replaceLastAssistant: boolean) => {
-    const next = [...messages];
-    if (!replaceLastAssistant) return next;
-    for (let index = next.length - 1; index >= 0; index -= 1) {
-      if (next[index].role === "assistant") {
-        next.splice(index, 1);
-        break;
-      }
+  const submitCreate = async () => {
+    const title = createDraft.title.trim();
+    const participants = buildParticipantPayload(createDraft);
+    if (!title || participants.length === 0) {
+      setError({
+        code: "VALIDATION_ERROR",
+        message: "请至少填写会话名称，并选择一个参与智能体。",
+      });
+      return;
     }
-    return next;
+    try {
+      const created = await onCreateSession({ title, participants });
+      setShowCreateModal(false);
+      setCreateDraft(createSessionDraft(agents));
+      await loadSessions(created.id);
+      setNotice("");
+      setError(null);
+    } catch (rawError) {
+      setError(toApiError(rawError));
+    }
   };
 
-  const regenerateReply = async (agent: AgentConfig) => {
-    const state = windows[agent.id] ?? createEmptyWindow();
-    if (!state.selectedSessionId || state.sending || state.rewriting || state.undoing || disabled) {
+  const submitSettings = async () => {
+    if (!selectedSession) {
       return;
     }
-    if (!state.messages.some((message) => message.role === "user")) {
-      updateWindow(agent.id, {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "当前会话没有用户消息，无法重新生成。",
+    const title = settingsDraft.title.trim();
+    const participants = buildParticipantPayload(settingsDraft);
+    if (!title || participants.length === 0) {
+      setError({
+        code: "VALIDATION_ERROR",
+        message: "会话名称不能为空，且至少保留一个参与智能体。",
+      });
+      return;
+    }
+    try {
+      await onUpdateSession(selectedSession.id, {
+        title,
+        participants,
+        isPinned: settingsDraft.isPinned,
+        isArchived: settingsDraft.isArchived,
+        tags: settingsDraft.tags
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0),
+      });
+      setShowSettingsModal(false);
+      await loadSessions(selectedSession.id);
+      setError(null);
+    } catch (rawError) {
+      setError(toApiError(rawError));
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!selectedSessionId || !composer.trim()) {
+      return;
+    }
+    const userMessage = composer.trim();
+    const controller = new AbortController();
+    activeStreamRef.current?.abort();
+    activeStreamRef.current = controller;
+    setSending(true);
+    setStreaming(true);
+    try {
+      const tempUserMessage: WorkspaceChatMessage = {
+        role: "user",
+        content: userMessage,
+        agentId: null,
+        visibleToAgentIds: [],
+        createdAt: `temp-user-${Date.now()}`,
+      };
+      setMessages((current) => [...current, tempUserMessage]);
+      setComposer("");
+      await onSendMessageStream(
+        {
+          sessionId: selectedSessionId,
+          userMessage,
+          temperature: null,
+          maxTokens: null,
+          topP: null,
+          frequencyPenalty: null,
         },
-      });
-      return;
-    }
-
-    const request: RegenerateChatReplyRequest = {
-      agentId: agent.id,
-      sessionId: state.selectedSessionId,
-      replaceLastAssistant: state.regenerateReplaceLastAssistant,
-      temperature: parseOptionalNumber(state.temperature),
-      maxTokens: parseOptionalNumber(state.maxTokens),
-      topP: parseOptionalNumber(state.topP),
-      frequencyPenalty: parseOptionalNumber(state.frequencyPenalty),
-    };
-
-    if (state.streamingEnabled) {
-      const controller = beginStream(agent.id);
-      setWindows((current) => {
-        const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-        return {
-          ...current,
-          [agent.id]: {
-            ...windowState,
-            sending: true,
-            streaming: true,
-            error: null,
-            messages: [
-              ...buildRegenerateBaseMessages(
-                windowState.messages,
-                windowState.regenerateReplaceLastAssistant,
-              ),
-              { role: "assistant", content: "" },
-            ],
-          },
-        };
-      });
-
-      try {
-        const result = await onRegenerateStream(
-          request,
-          (chunk) => {
-            setWindows((current) => {
-              const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-              const messages = [...windowState.messages];
-              for (let index = messages.length - 1; index >= 0; index -= 1) {
-                if (messages[index].role === "assistant") {
-                  messages[index] = {
-                    ...messages[index],
-                    content: `${messages[index].content}${chunk}`,
-                  };
-                  break;
-                }
-              }
-              return {
-                ...current,
-                [agent.id]: {
-                  ...windowState,
-                  messages,
-                },
-              };
-            });
-          },
-          controller.signal,
-        );
-
-        setWindows((current) => {
-          const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-          const messages = [...windowState.messages];
-          for (let index = messages.length - 1; index >= 0; index -= 1) {
-            if (messages[index].role === "assistant") {
-              messages[index] = {
-                ...messages[index],
-                content: result.message,
-              };
-              break;
-            }
-          }
-          return {
+        (reply) => {
+          const tempKey = `temp-assistant-${reply.agentId}-${Date.now()}-${Math.random()}`;
+          setMessages((current) => [
             ...current,
-            [agent.id]: {
-              ...windowState,
-              sending: false,
-              streaming: false,
-              lastModelId: result.modelId,
-              selectedSessionId: result.sessionId,
-              messages,
+            {
+              role: "assistant",
+              content: "",
+              agentId: reply.agentId,
+              visibleToAgentIds: [],
+              createdAt: tempKey,
             },
-          };
-        });
-
-        void loadSessions(agent.id, result.sessionId);
-      } catch (rawError) {
-        const mapped = toApiError(rawError);
-        if (mapped.code === "STREAM_ABORTED") {
-          setWindows((current) => {
-            const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-            return {
-              ...current,
-              [agent.id]: {
-                ...windowState,
-                sending: false,
-                streaming: false,
-                error: null,
-              },
-            };
-          });
-          void loadMessages(agent.id, state.selectedSessionId);
-          void loadSessions(agent.id, state.selectedSessionId);
-        } else {
-          updateWindow(agent.id, {
-            sending: false,
-            streaming: false,
-            error: mapped,
-            messages: state.messages,
-          });
-          void loadMessages(agent.id, state.selectedSessionId);
-        }
-      } finally {
-        finishStream(agent.id, controller);
-      }
-      return;
-    }
-
-    updateWindow(agent.id, { sending: true, streaming: false, error: null });
-    try {
-      const result = await onRegenerate(request);
-      setWindows((current) => {
-        const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-        return {
-          ...current,
-          [agent.id]: {
-            ...windowState,
-            sending: false,
-            streaming: false,
-            lastModelId: result.modelId,
-            selectedSessionId: result.sessionId,
-            messages: [
-              ...buildRegenerateBaseMessages(
-                windowState.messages,
-                windowState.regenerateReplaceLastAssistant,
-              ),
-              { role: "assistant", content: result.message },
-            ],
-          },
-        };
-      });
-      void loadSessions(agent.id, result.sessionId);
-    } catch (rawError) {
-      updateWindow(agent.id, { sending: false, streaming: false, error: toApiError(rawError) });
-    }
-  };
-
-  const rewriteUserMessage = async (
-    agent: AgentConfig,
-    targetUserOffset: number,
-    currentMessage: string,
-  ) => {
-    const state = windows[agent.id] ?? createEmptyWindow();
-    if (
-      !state.selectedSessionId ||
-      state.rewriting ||
-      state.sending ||
-      state.undoing ||
-      disabled
-    ) {
-      return;
-    }
-
-    if (!Number.isInteger(targetUserOffset) || targetUserOffset < 0) {
-      updateWindow(agent.id, {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "改写目标无效。",
+          ]);
         },
-      });
-      return;
-    }
-
-    const nextUserMessage = window.prompt("编辑用户消息", currentMessage);
-    if (nextUserMessage === null) return;
-    const trimmed = nextUserMessage.trim();
-    if (!trimmed) {
-      updateWindow(agent.id, {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "用户消息不能为空。",
-        },
-      });
-      return;
-    }
-
-    updateWindow(agent.id, { rewriting: true, error: null });
-    try {
-      const result = await onRewriteUserMessage({
-        agentId: agent.id,
-        sessionId: state.selectedSessionId,
-        targetUserOffset,
-        userMessage: trimmed,
-        temperature: parseOptionalNumber(state.temperature),
-        maxTokens: parseOptionalNumber(state.maxTokens),
-        topP: parseOptionalNumber(state.topP),
-        frequencyPenalty: parseOptionalNumber(state.frequencyPenalty),
-      });
-      updateWindow(agent.id, {
-        rewriting: false,
-        lastModelId: result.modelId,
-        selectedSessionId: result.sessionId,
-      });
-      const refreshedMessages = await loadMessages(agent.id, result.sessionId);
-      if (refreshedMessages) {
-        scheduleMessageHighlight(
-          agent.id,
-          collectRewriteHighlightIndexes(refreshedMessages, targetUserOffset),
-        );
-      }
-      void loadSessions(agent.id, result.sessionId);
-    } catch (rawError) {
-      updateWindow(agent.id, { rewriting: false, error: toApiError(rawError) });
-    }
-  };
-
-  const rewriteLastUserMessage = async (agent: AgentConfig) => {
-    const state = windows[agent.id] ?? createEmptyWindow();
-    const lastUser = [...state.messages].reverse().find((message) => message.role === "user");
-    if (!lastUser) {
-      updateWindow(agent.id, {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "当前会话没有用户消息，无法改写。",
-        },
-      });
-      return;
-    }
-    await rewriteUserMessage(agent, 0, lastUser.content);
-  };
-
-  const undoLastTurn = async (agentId: string) => {
-    const state = windows[agentId] ?? createEmptyWindow();
-    if (!state.selectedSessionId || state.undoing || state.sending || disabled) return;
-
-    updateWindow(agentId, { undoing: true, error: null });
-    try {
-      await onUndoLastTurn({
-        agentId,
-        sessionId: state.selectedSessionId,
-      });
-      await loadMessages(agentId, state.selectedSessionId);
-      void loadSessions(agentId, state.selectedSessionId);
-      updateWindow(agentId, { undoing: false });
-    } catch (rawError) {
-      updateWindow(agentId, { undoing: false, error: toApiError(rawError) });
-    }
-  };
-
-  const sendMessage = async (agent: AgentConfig) => {
-    const state = windows[agent.id] ?? createEmptyWindow();
-    const userMessage = state.input.trim();
-    if (
-      !userMessage ||
-      !state.selectedSessionId ||
-      state.sending ||
-      state.rewriting ||
-      state.undoing ||
-      disabled
-    ) {
-      return;
-    }
-
-    const request: ChatWithAgentRequest = {
-      agentId: agent.id,
-      sessionId: state.selectedSessionId,
-      userMessage,
-      history: [],
-      temperature: parseOptionalNumber(state.temperature),
-      maxTokens: parseOptionalNumber(state.maxTokens),
-      topP: parseOptionalNumber(state.topP),
-      frequencyPenalty: parseOptionalNumber(state.frequencyPenalty),
-    };
-
-    if (state.streamingEnabled) {
-      const controller = beginStream(agent.id);
-      setWindows((current) => {
-        const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-        return {
-          ...current,
-          [agent.id]: {
-            ...windowState,
-            sending: true,
-            streaming: true,
-            input: "",
-            error: null,
-            messages: [
-              ...windowState.messages,
-              { role: "user", content: userMessage },
-              { role: "assistant", content: "" },
-            ],
-          },
-        };
-      });
-
-      try {
-        const result = await onChatStream(
-          request,
-          (chunk) => {
-            setWindows((current) => {
-              const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-              const messages = [...windowState.messages];
-              for (let index = messages.length - 1; index >= 0; index -= 1) {
-                if (messages[index].role === "assistant") {
-                  messages[index] = {
-                    ...messages[index],
-                    content: `${messages[index].content}${chunk}`,
-                  };
-                  break;
-                }
+        (agentId, chunk) => {
+          setMessages((current) => {
+            const next = [...current];
+            for (let index = next.length - 1; index >= 0; index -= 1) {
+              const item = next[index];
+              if (
+                item.role === "assistant" &&
+                item.agentId === agentId &&
+                item.createdAt.startsWith("temp-assistant-")
+              ) {
+                next[index] = {
+                  ...item,
+                  content: `${item.content}${chunk}`,
+                };
+                break;
               }
-              return {
-                ...current,
-                [agent.id]: {
-                  ...windowState,
-                  messages,
-                },
-              };
-            });
-          },
-          controller.signal,
-        );
-
-        setWindows((current) => {
-          const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-          const messages = [...windowState.messages];
-          for (let index = messages.length - 1; index >= 0; index -= 1) {
-            if (messages[index].role === "assistant") {
-              messages[index] = {
-                ...messages[index],
-                content: result.message,
-              };
-              break;
             }
-          }
-          return {
-            ...current,
-            [agent.id]: {
-              ...windowState,
-              sending: false,
-              streaming: false,
-              lastModelId: result.modelId,
-              selectedSessionId: result.sessionId,
-              messages,
-            },
-          };
-        });
-
-        void loadSessions(agent.id, result.sessionId);
-      } catch (rawError) {
-        const mapped = toApiError(rawError);
-        if (mapped.code === "STREAM_ABORTED") {
-          setWindows((current) => {
-            const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-            return {
-              ...current,
-              [agent.id]: {
-                ...windowState,
-                sending: false,
-                streaming: false,
-                error: null,
-              },
-            };
+            return next;
           });
-          void loadMessages(agent.id, state.selectedSessionId);
-          void loadSessions(agent.id, state.selectedSessionId);
-        } else {
-          updateWindow(agent.id, {
-            sending: false,
-            streaming: false,
-            error: mapped,
-            input: state.input,
-            messages: state.messages,
-          });
-          void loadMessages(agent.id, state.selectedSessionId);
-        }
-      } finally {
-        finishStream(agent.id, controller);
-      }
-      return;
-    }
-
-    updateWindow(agent.id, { sending: true, streaming: false, error: null });
-    try {
-      const result = await onChat(request);
-
-      setWindows((current) => {
-        const windowState = current[agent.id] ?? createEmptyWindow();
-        return {
-          ...current,
-          [agent.id]: {
-            ...windowState,
-            sending: false,
-            streaming: false,
-            input: "",
-            lastModelId: result.modelId,
-            selectedSessionId: result.sessionId,
-            messages: [
-              ...windowState.messages,
-              { role: "user", content: userMessage },
-              { role: "assistant", content: result.message },
-            ],
-          },
-        };
-      });
-
-      void loadSessions(agent.id, result.sessionId);
+        },
+        controller.signal,
+      );
+      await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
+      setNotice("消息已发送。若没有回复，通常是当前会话规则未命中回复条件。");
+      setError(null);
     } catch (rawError) {
-      updateWindow(agent.id, { sending: false, streaming: false, error: toApiError(rawError) });
+      const mapped = toApiError(rawError);
+      if (mapped.code === "STREAM_ABORTED") {
+        setNotice("已停止生成。");
+        await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
+      } else {
+        setError(mapped);
+        await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
+      }
+    } finally {
+      setSending(false);
+      setStreaming(false);
+      if (activeStreamRef.current === controller) {
+        activeStreamRef.current = null;
+      }
     }
   };
+
+  const clearMessages = async () => {
+    if (!selectedSessionId || !window.confirm("确认清空当前会话消息？")) {
+      return;
+    }
+    try {
+      await onClearMessages(selectedSessionId);
+      await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
+    } catch (rawError) {
+      setError(toApiError(rawError));
+    }
+  };
+
+  const stopGeneration = () => {
+    activeStreamRef.current?.abort();
+  };
+
+  const deleteSession = async () => {
+    if (!selectedSession || !window.confirm(`确认删除会话“${selectedSession.title}”？`)) {
+      return;
+    }
+    try {
+      await onDeleteSession(selectedSession.id);
+      setShowSettingsModal(false);
+      await loadSessions();
+    } catch (rawError) {
+      setError(toApiError(rawError));
+    }
+  };
+
+  const renderParticipantEditor = (
+    draft: SessionDraft,
+    setter: Dispatch<SetStateAction<SessionDraft>>,
+  ) => (
+    <div className="chat-participant-editor">
+      {agents.map((agent) => {
+        const participant = draft.participants.find((item) => item.agentId === agent.id);
+        if (!participant) {
+          return null;
+        }
+        return (
+          <div
+            className={participant.enabled ? "chat-participant-row is-draggable" : "chat-participant-row"}
+            draggable={participant.enabled}
+            key={agent.id}
+            onDragOver={(event) => {
+              if (!participant.enabled) {
+                return;
+              }
+              event.preventDefault();
+            }}
+            onDragStart={() => {
+              dragAgentIdRef.current = agent.id;
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const sourceAgentId = dragAgentIdRef.current;
+              if (!sourceAgentId || !participant.enabled) {
+                return;
+              }
+              moveDraftParticipant(setter, sourceAgentId, agent.id);
+              dragAgentIdRef.current = null;
+            }}
+            onDragEnd={() => {
+              dragAgentIdRef.current = null;
+            }}
+          >
+            <label className="inline-check">
+              <input
+                checked={participant.enabled}
+                onChange={(event) =>
+                  updateDraftParticipant(setter, agent.id, { enabled: event.target.checked })
+                }
+                type="checkbox"
+              />
+              {agent.name}
+            </label>
+            <span className="chat-participant-drag-hint">
+              {participant.enabled ? "拖拽调整顺序" : "启用后可排序"}
+            </span>
+            <label>
+              接收
+              <select
+                disabled={!participant.enabled}
+                onChange={(event) =>
+                  updateDraftParticipant(setter, agent.id, {
+                    receiveMode: event.target.value as WorkspaceChatParticipantMode,
+                  })
+                }
+                value={participant.receiveMode}
+              >
+                {modeOptions.map((option) => (
+                  <option key={`${agent.id}-receive-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              回复
+              <select
+                disabled={!participant.enabled}
+                onChange={(event) =>
+                  updateDraftParticipant(setter, agent.id, {
+                    replyMode: event.target.value as WorkspaceChatParticipantMode,
+                  })
+                }
+                value={participant.replyMode}
+              >
+                {modeOptions.map((option) => (
+                  <option key={`${agent.id}-reply-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   if (agents.length === 0) {
     return (
       <section className="panel">
         <header className="panel-header">
-          <h2>对话聊天</h2>
+          <div>
+            <h2>聊天工作台</h2>
+            <small className="hint">先创建至少一个智能体，才能开始单聊或群组会话。</small>
+          </div>
         </header>
         <article className="card">
           <p className="hint">请先在“智能体设置”中创建至少一个智能体。</p>
-        </article>
-      </section>
-    );
-  }
-
-  const visibleAgents = focusedAgentId
-    ? agents.filter((agent) => agent.id === focusedAgentId)
-    : agents;
-
-  if (visibleAgents.length === 0) {
-    return (
-      <section className="panel">
-        <header className="panel-header">
-          <h2>对话聊天</h2>
-        </header>
-        <article className="card">
-          <p className="hint">请选择一个智能体开始对话。</p>
+          <div className="actions">
+            <button className="primary" onClick={onOpenAgentSettings} type="button">
+              前往智能体设置
+            </button>
+          </div>
         </article>
       </section>
     );
@@ -1168,519 +526,268 @@ export function ChatWorkspace({
 
   return (
     <section className="panel">
-      <header className="panel-header chat-workspace-header">
+      <header className="panel-header">
         <div>
-          <span className="hero-chip hero-chip-soft">对话工作台</span>
-          <h2>对话聊天</h2>
+          <h2>聊天工作台</h2>
+          <small className="hint">会话列表优先，支持单聊与群组会话，以及按参与者设置接收/回复规则。</small>
         </div>
-        <small className="hint">每个智能体独立窗口，支持多会话、流式回复与快速整理</small>
+        <div className="actions">
+          <button className="ghost" onClick={() => void loadSessions(selectedSessionId)} type="button">
+            刷新会话
+          </button>
+          <button
+            className="primary"
+            onClick={() => {
+              setCreateDraft(createSessionDraft(agents));
+              setShowCreateModal(true);
+            }}
+            type="button"
+          >
+            新建会话
+          </button>
+        </div>
       </header>
 
-      <div
-        className={
-          visibleAgents.length === 1 ? "chat-window-grid chat-window-grid-single" : "chat-window-grid"
-        }
-      >
-        {visibleAgents.map((agent) => {
-          const state = windows[agent.id] ?? createEmptyWindow();
-          const selectedSession = state.sessions.find((item) => item.id === state.selectedSessionId) ?? null;
-          const sessionSearch = state.sessionSearch.trim().toLowerCase();
-          const filteredSessions = state.sessions.filter((session) => {
-            if (state.sessionFilter === "active" && session.isArchived) return false;
-            if (state.sessionFilter === "archived" && !session.isArchived) return false;
-            if (state.sessionOnlyPinned && !session.isPinned) return false;
-            if (!sessionSearch) return true;
-            const title = session.title.toLowerCase();
-            const preview = (session.lastMessagePreview ?? "").toLowerCase();
-            const tags = session.tags.join(" ").toLowerCase();
-            if (tags.includes(sessionSearch)) return true;
-            return title.includes(sessionSearch) || preview.includes(sessionSearch);
-          });
-          const userMessageIndices = state.messages
-            .map((message, index) => (message.role === "user" ? index : -1))
-            .filter((index) => index >= 0);
-          const userOffsetByMessageIndex = new Map<number, number>();
-          for (let userPosition = 0; userPosition < userMessageIndices.length; userPosition += 1) {
-            const messageIndex = userMessageIndices[userPosition];
-            userOffsetByMessageIndex.set(messageIndex, userMessageIndices.length - 1 - userPosition);
-          }
+      <div className="chat-session-workbench">
+        <aside className="chat-session-sidebar">
+          <div className="chat-session-sidebar-head">
+            <strong>会话列表</strong>
+            <small>{sessions.length} 个会话</small>
+          </div>
+          <div className="chat-session-list">
+            {loadingSessions && <p className="hint">加载会话中...</p>}
+            {!loadingSessions && sessions.length === 0 && (
+              <p className="hint">还没有会话，先创建一个单聊或群组会话。</p>
+            )}
+            {sessions.map((session) => (
+              <button
+                className={session.id === selectedSessionId ? "chat-session-item active" : "chat-session-item"}
+                key={session.id}
+                onClick={() => setSelectedSessionId(session.id)}
+                type="button"
+              >
+                <strong>{session.title}</strong>
+                <small>
+                  {session.participants.map((item) => agentNameById[item.agentId] ?? item.agentId).join(" / ")}
+                </small>
+                <small>
+                  {session.messageCount} 条 · {formatDateTime(session.updatedAt)}
+                </small>
+                <span>{session.lastMessagePreview ?? "暂无消息"}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
 
-          return (
-            <article className="chat-window" key={agent.id}>
-              <div className="chat-window-header">
+        <div className="chat-session-main">
+          {selectedSession ? (
+            <>
+              <div className="chat-session-main-head">
                 <div>
-                  <span className="chat-window-kicker">当前智能体会话</span>
-                  <h3>{agent.name}</h3>
-                  <small className="hint">
-                    模式：{agent.mode} · 最近模型：{state.lastModelId || "未发送"}
-                  </small>
+                  <div className="chat-session-main-title-row">
+                    <h3>{selectedSession.title}</h3>
+                    <span className="status-badge">{selectedSession.isGroup ? "群组会话" : "单聊会话"}</span>
+                  </div>
+                  <div className="chat-session-participants">
+                    {selectedSession.participants.map((participant) => (
+                      <span className="chat-session-participant-pill" key={participant.agentId}>
+                        {agentNameById[participant.agentId] ?? participant.agentId}
+                        <small>
+                          接收 {participant.receiveMode === "all" ? "全消息" : "仅 @"} · 回复{" "}
+                          {participant.replyMode === "all" ? "全消息" : "仅 @"}
+                        </small>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="chat-window-status">
-                  <span
-                    className={
-                      state.streaming
-                        ? "status-badge is-live"
-                        : state.sending
-                          ? "status-badge is-busy"
-                          : "status-badge"
-                    }
+                <div className="actions">
+                  <button className="ghost" disabled={disabled} onClick={() => void clearMessages()} type="button">
+                    清空消息
+                  </button>
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      setSettingsDraft(createSessionDraft(agents, selectedSession));
+                      setShowSettingsModal(true);
+                    }}
+                    type="button"
                   >
-                    {state.streaming
-                      ? "流式生成中"
-                      : state.sending
-                        ? "处理中"
-                        : selectedSession
-                          ? "会话已连接"
-                          : "待开始"}
-                  </span>
+                    会话设置
+                  </button>
                 </div>
               </div>
 
-              <div className="chat-body">
-                <aside className="chat-session-panel">
-                  <div className="chat-session-head">
-                    <div>
-                      <strong>会话簿</strong>
-                      <small>{state.sessions.length} 个会话</small>
-                    </div>
-                    {selectedSession && (
-                      <span className="chat-session-badge">
-                        {selectedSession.isArchived ? "已归档" : "活跃"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="chat-session-actions">
-                    <button className="ghost" onClick={() => void createSession(agent.id)} type="button">
-                      新建会话
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={
-                        state.loadingSessions ||
-                        state.loadingMessages ||
-                        state.sending ||
-                        state.rewriting ||
-                        state.undoing ||
-                        state.clearing
-                      }
-                      onClick={() => void refreshSessions(agent.id)}
-                      type="button"
+              <div className="chat-log chat-log-standalone">
+                {loadingMessages && <p className="hint">加载消息中...</p>}
+                {!loadingMessages && messages.length === 0 && (
+                  <p className="hint">发送第一条消息开始对话。使用 `@智能体名` 可以只触发指定参与者。</p>
+                )}
+                {messages.map((message, index) => {
+                  const speaker =
+                    message.role === "user"
+                      ? "你"
+                      : message.agentId
+                        ? agentNameById[message.agentId] ?? message.agentId
+                        : "系统";
+                  return (
+                    <div
+                      className={message.role === "assistant" ? "chat-bubble assistant" : "chat-bubble user"}
+                      key={`${message.createdAt}-${index}`}
                     >
-                      刷新会话
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={!selectedSession}
-                      onClick={() => void duplicateSession(agent.id)}
-                      type="button"
-                    >
-                      复制
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={!selectedSession || selectedSession.isDefault}
-                      onClick={() => void renameSession(agent.id)}
-                      type="button"
-                    >
-                      重命名
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={!selectedSession}
-                      onClick={() => void toggleSessionPinned(agent.id)}
-                      type="button"
-                    >
-                      {selectedSession?.isPinned ? "取消置顶" : "置顶"}
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={!selectedSession || selectedSession.isDefault}
-                      onClick={() => void toggleSessionArchived(agent.id)}
-                      type="button"
-                    >
-                      {selectedSession?.isArchived ? "取消归档" : "归档"}
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={!selectedSession}
-                      onClick={() => void editSessionTags(agent.id)}
-                      type="button"
-                    >
-                      标签
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={!selectedSession || selectedSession.isDefault}
-                      onClick={() => void deleteSession(agent.id)}
-                      type="button"
-                    >
-                      删除
-                    </button>
-                  </div>
-
-                  <input
-                    onChange={(event) => updateWindow(agent.id, { sessionSearch: event.target.value })}
-                    placeholder="搜索标题/标签/最后消息"
-                    value={state.sessionSearch}
-                  />
-                  <div className="chat-session-filters">
-                    <select
-                      onChange={(event) =>
-                        updateWindow(agent.id, {
-                          sessionFilter: event.target.value as "all" | "active" | "archived",
-                        })
-                      }
-                      value={state.sessionFilter}
-                    >
-                      <option value="active">仅活动</option>
-                      <option value="archived">仅归档</option>
-                      <option value="all">全部</option>
-                    </select>
-                    <label className="inline-check">
-                      <input
-                        checked={state.sessionOnlyPinned}
-                        onChange={(event) =>
-                          updateWindow(agent.id, { sessionOnlyPinned: event.target.checked })
-                        }
-                        type="checkbox"
-                      />
-                      仅置顶
-                    </label>
-                  </div>
-
-                  <div className="chat-session-list">
-                    {state.loadingSessions && <p className="hint">加载会话中...</p>}
-                    {!state.loadingSessions && state.sessions.length === 0 && <p className="hint">暂无会话</p>}
-                    {!state.loadingSessions && state.sessions.length > 0 && filteredSessions.length === 0 && (
-                      <p className="hint">没有匹配的会话。</p>
-                    )}
-                    {filteredSessions.map((session) => (
-                      <button
-                        className={
-                          session.id === state.selectedSessionId
-                            ? "chat-session-item active"
-                            : "chat-session-item"
-                        }
-                        key={session.id}
-                        onClick={() => void loadMessages(agent.id, session.id)}
-                        type="button"
-                      >
-                        <strong>
-                          {session.isPinned ? "[置顶] " : ""}
-                          {session.isDefault ? `[默认] ${session.title}` : session.title}
-                          {session.isArchived ? " [归档]" : ""}
-                        </strong>
-                        <small>
-                          {session.messageCount} 条 · {formatDateTime(session.updatedAt)}
-                        </small>
-                        {session.tags.length > 0 && <small>标签：{session.tags.join(" / ")}</small>}
-                        <span>{session.lastMessagePreview ?? "暂无消息"}</span>
-                      </button>
-                    ))}
-                  </div>
-                </aside>
-
-                <div className="chat-main">
-                  {selectedSession && (
-                    <div className="chat-session-meta hint">
-                      <span>{selectedSession.title}</span>
-                      <span>{selectedSession.messageCount} 条消息</span>
-                      <span>{selectedSession.isArchived ? "已归档" : "活动"}</span>
-                    </div>
-                  )}
-
-                  <div
-                    className="chat-log"
-                    ref={(node) => {
-                      chatLogRefs.current[agent.id] = node;
-                    }}
-                  >
-                    {(state.loadingSessions || state.loadingMessages) && <p className="hint">加载中...</p>}
-                    {!state.loadingSessions && !state.loadingMessages && state.messages.length === 0 && (
-                      <p className="hint">发送第一条消息开始对话。</p>
-                    )}
-                    {state.messages.map((item, index) => (
-                      <div
-                        className={
-                          [
-                            "chat-bubble",
-                            item.role === "assistant" ? "assistant" : "user",
-                            state.highlightedMessageIndexes.includes(index) ? "highlight" : "",
-                          ]
-                            .filter((value) => value.length > 0)
-                            .join(" ")
-                        }
-                        key={`${agent.id}-${item.role}-${index}`}
-                      >
-                        <div className="chat-bubble-head">
-                          <strong>{item.role === "assistant" ? agent.name : "你"}</strong>
-                          <div className="chat-bubble-actions">
-                            <button
-                              className="ghost"
-                              onClick={() => void copyMessageContent(agent.id, item.content)}
-                              type="button"
-                            >
-                              复制
-                            </button>
-                            <button
-                              className="ghost"
-                              onClick={() => quoteMessageToInput(agent.id, item.content)}
-                              type="button"
-                            >
-                              引用
-                            </button>
-                            {item.role === "user" && (
-                              <button
-                                className="ghost"
-                                disabled={
-                                  disabled ||
-                                  state.sending ||
-                                  state.rewriting ||
-                                  state.undoing ||
-                                  state.loadingSessions ||
-                                  state.loadingMessages ||
-                                  state.clearing ||
-                                  !state.selectedSessionId
-                                }
-                                onClick={() => {
-                                  const targetUserOffset = userOffsetByMessageIndex.get(index);
-                                  if (targetUserOffset === undefined) {
-                                    updateWindow(agent.id, {
-                                      error: {
-                                        code: "VALIDATION_ERROR",
-                                        message: "无法定位这条用户消息。",
-                                      },
-                                    });
-                                    return;
-                                  }
-                                  void rewriteUserMessage(agent, targetUserOffset, item.content);
-                                }}
-                                type="button"
-                              >
-                                改写此提问
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <p>{item.content}</p>
+                      <div className="chat-bubble-head">
+                        <strong>{speaker}</strong>
+                        <small>{formatDateTime(message.createdAt)}</small>
                       </div>
-                    ))}
-                  </div>
-
-                  {state.error && (
-                    <div className="error-inline">
-                      <strong>{state.error.code}</strong>
-                      <span>{state.error.message}</span>
+                      <div>{message.content}</div>
                     </div>
-                  )}
+                  );
+                })}
+              </div>
 
-                  <div className="chat-compose">
-                    <div className="chat-option-grid">
-                      <label className="inline-check">
-                        <input
-                          checked={state.streamingEnabled}
-                          onChange={(event) =>
-                            updateWindow(agent.id, { streamingEnabled: event.target.checked })
-                          }
-                          type="checkbox"
-                        />
-                        流式显示回复
-                      </label>
-                      <label className="inline-check">
-                        <input
-                          checked={state.regenerateReplaceLastAssistant}
-                          onChange={(event) =>
-                            updateWindow(agent.id, {
-                              regenerateReplaceLastAssistant: event.target.checked,
-                            })
-                          }
-                          type="checkbox"
-                        />
-                        重生成时替换上一条助手回复
-                      </label>
-                    </div>
-
-                    <div className="chat-override-grid">
-                      <label>
-                        Temperature 覆盖
-                        <input
-                          max="2"
-                          min="0"
-                          onChange={(event) => updateWindow(agent.id, { temperature: event.target.value })}
-                          step="0.1"
-                          type="number"
-                          value={state.temperature}
-                        />
-                      </label>
-                      <label>
-                        Max Tokens 覆盖
-                        <input
-                          min="1"
-                          onChange={(event) => updateWindow(agent.id, { maxTokens: event.target.value })}
-                          type="number"
-                          value={state.maxTokens}
-                        />
-                      </label>
-                      <label>
-                        Top P 覆盖
-                        <input
-                          max="1"
-                          min="0"
-                          onChange={(event) => updateWindow(agent.id, { topP: event.target.value })}
-                          step="0.05"
-                          type="number"
-                          value={state.topP}
-                        />
-                      </label>
-                      <label>
-                        Frequency Penalty 覆盖
-                        <input
-                          max="2"
-                          min="-2"
-                          onChange={(event) => updateWindow(agent.id, { frequencyPenalty: event.target.value })}
-                          step="0.1"
-                          type="number"
-                          value={state.frequencyPenalty}
-                        />
-                      </label>
-                    </div>
-
-                    <label className="chat-input-field">
-                      输入消息
-                      <textarea
-                        onChange={(event) => updateWindow(agent.id, { input: event.target.value })}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            void sendMessage(agent);
-                          }
-                        }}
-                        placeholder="输入你想说的话...（Enter 发送，Shift+Enter 换行）"
-                        rows={4}
-                        value={state.input}
-                      />
-                    </label>
-
-                    <div className="actions chat-actions">
-                      <button
-                        className="primary"
-                        disabled={
-                          disabled ||
-                          state.sending ||
-                          state.rewriting ||
-                          state.undoing ||
-                          state.loadingSessions ||
-                          state.loadingMessages ||
-                          state.clearing ||
-                          !state.selectedSessionId ||
-                          !state.input.trim()
-                        }
-                        onClick={() => void sendMessage(agent)}
-                        type="button"
-                      >
-                        {state.sending ? (state.streaming ? "生成中..." : "发送中...") : "发送"}
-                      </button>
-                      <button
-                        className="danger"
-                        disabled={!state.streaming}
-                        onClick={() => stopStreaming(agent.id)}
-                        type="button"
-                      >
+              <div className="chat-composer card">
+                <textarea
+                  onChange={(event) => setComposer(event.target.value)}
+                  placeholder="输入消息；如果会话里有仅 @ 回复的智能体，可以使用 @名称 定向触发。"
+                  rows={4}
+                  value={composer}
+                />
+                <div className="chat-composer-actions">
+                  <small className="hint">
+                    当前会话 {selectedSession.isGroup ? "包含多名智能体" : "仅包含一个智能体"}。
+                    {streaming ? " 正在生成回复，可手动停止。" : ""}
+                  </small>
+                  <div className="actions">
+                    {streaming && (
+                      <button className="ghost" onClick={stopGeneration} type="button">
                         停止生成
                       </button>
-                      <button
-                        className="ghost"
-                        disabled={
-                          disabled ||
-                          state.sending ||
-                          state.rewriting ||
-                          state.undoing ||
-                          state.loadingSessions ||
-                          state.loadingMessages ||
-                          state.clearing ||
-                          !state.selectedSessionId ||
-                          !state.messages.some((item) => item.role === "user")
-                        }
-                        onClick={() => void regenerateReply(agent)}
-                        type="button"
-                      >
-                        重新生成上条回复
-                      </button>
-                      <button
-                        className="ghost"
-                        disabled={
-                          disabled ||
-                          state.sending ||
-                          state.rewriting ||
-                          state.undoing ||
-                          state.loadingSessions ||
-                          state.loadingMessages ||
-                          state.clearing ||
-                          !state.selectedSessionId ||
-                          !state.messages.some((item) => item.role === "user")
-                        }
-                        onClick={() => void rewriteLastUserMessage(agent)}
-                        type="button"
-                      >
-                        {state.rewriting ? "改写中..." : "改写最后提问"}
-                      </button>
-                      <button
-                        className="ghost"
-                        disabled={
-                          disabled ||
-                          state.sending ||
-                          state.rewriting ||
-                          state.undoing ||
-                          state.loadingSessions ||
-                          state.loadingMessages ||
-                          state.clearing ||
-                          !state.selectedSessionId ||
-                          state.messages.length === 0
-                        }
-                        onClick={() => void undoLastTurn(agent.id)}
-                        type="button"
-                      >
-                        {state.undoing ? "撤销中..." : "撤销上一轮"}
-                      </button>
-                      <button
-                        className="ghost"
-                        disabled={
-                          disabled ||
-                          state.sending ||
-                          state.rewriting ||
-                          state.undoing ||
-                          state.clearing ||
-                          !state.selectedSessionId
-                        }
-                        onClick={() => void clearMessages(agent.id)}
-                        type="button"
-                      >
-                        {state.clearing ? "清空中..." : "清空消息"}
-                      </button>
-                      <button
-                        className="ghost"
-                        disabled={state.messages.length === 0 || !state.selectedSessionId}
-                        onClick={() => exportSession(agent, state)}
-                        type="button"
-                      >
-                        导出 Markdown
-                      </button>
-                      <button
-                        className="ghost"
-                        disabled={state.exportingAll || state.sessions.length === 0}
-                        onClick={() => void exportAllSessions(agent, state)}
-                        type="button"
-                      >
-                        {state.exportingAll ? "导出中..." : "导出全部会话"}
-                      </button>
-                    </div>
+                    )}
+                    <button
+                      className="primary"
+                      disabled={disabled || sending || !composer.trim()}
+                      onClick={() => void sendMessage()}
+                      type="button"
+                    >
+                      {sending ? "发送中..." : "发送消息"}
+                    </button>
                   </div>
                 </div>
               </div>
+            </>
+          ) : (
+            <article className="card">
+              <p className="hint">请选择一个会话，或先新建会话。</p>
+              <div className="actions">
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setCreateDraft(createSessionDraft(agents));
+                    setShowCreateModal(true);
+                  }}
+                  type="button"
+                >
+                  新建会话
+                </button>
+              </div>
             </article>
-          );
-        })}
+          )}
+        </div>
       </div>
+
+      {notice && <div className="hint workspace-chat-notice">{notice}</div>}
+      {error && errorDisplay && (
+        <div className="error-box">
+          <strong>{errorDisplay.title}</strong>
+          <div>{errorDisplay.message}</div>
+        </div>
+      )}
+
+      {showCreateModal && (
+        <FormModal title="新建会话" onClose={() => setShowCreateModal(false)}>
+          <div className="stack">
+            <label>
+              会话名称
+              <input
+                onChange={(event) =>
+                  setCreateDraft((current) => ({ ...current, title: event.target.value }))
+                }
+                placeholder="例如：产品策划群聊"
+                value={createDraft.title}
+              />
+            </label>
+            {renderParticipantEditor(createDraft, setCreateDraft)}
+            <small className="hint">单个参与者就是单聊，多个参与者会创建群组会话。</small>
+            <div className="actions">
+              <button className="ghost" onClick={() => setShowCreateModal(false)} type="button">
+                取消
+              </button>
+              <button className="primary" onClick={() => void submitCreate()} type="button">
+                创建会话
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      {showSettingsModal && selectedSession && (
+        <FormModal title="会话设置" onClose={() => setShowSettingsModal(false)}>
+          <div className="stack">
+            <label>
+              会话名称
+              <input
+                onChange={(event) =>
+                  setSettingsDraft((current) => ({ ...current, title: event.target.value }))
+                }
+                value={settingsDraft.title}
+              />
+            </label>
+            <div className="field-grid">
+              <label className="inline-check">
+                <input
+                  checked={settingsDraft.isPinned}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({ ...current, isPinned: event.target.checked }))
+                  }
+                  type="checkbox"
+                />
+                置顶会话
+              </label>
+              <label className="inline-check">
+                <input
+                  checked={settingsDraft.isArchived}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({ ...current, isArchived: event.target.checked }))
+                  }
+                  type="checkbox"
+                />
+                归档会话
+              </label>
+            </div>
+            <label>
+              标签（逗号分隔）
+              <input
+                onChange={(event) =>
+                  setSettingsDraft((current) => ({ ...current, tags: event.target.value }))
+                }
+                placeholder="例如：规划, 高优先级"
+                value={settingsDraft.tags}
+              />
+            </label>
+            {renderParticipantEditor(settingsDraft, setSettingsDraft)}
+            <div className="actions">
+              <button className="danger" onClick={() => void deleteSession()} type="button">
+                删除会话
+              </button>
+              <button className="ghost" onClick={() => setShowSettingsModal(false)} type="button">
+                取消
+              </button>
+              <button className="primary" onClick={() => void submitSettings()} type="button">
+                保存设置
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
     </section>
   );
 }
