@@ -42,6 +42,7 @@ const fallbackBootstrap: AppBootstrap = {
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const api = getApiClient();
 const LOGIN_SESSION_KEY = "girlagent.console.loggedIn.v1";
+const MOBILE_NAV_MEDIA_QUERY = "(max-width: 880px)";
 
 const navItems: Array<{ key: MainSection; label: string; caption: string }> = [
   { key: "overview", label: "总览", caption: "控制中心" },
@@ -112,6 +113,9 @@ const persistLoginState = (loggedIn: boolean) => {
   window.localStorage.removeItem(LOGIN_SESSION_KEY);
 };
 
+const isMobileViewport = (): boolean =>
+  typeof window !== "undefined" && window.matchMedia(MOBILE_NAV_MEDIA_QUERY).matches;
+
 const toApiError = (error: unknown): ApiError => {
   if (typeof error === "object" && error !== null) {
     const payload = error as { code?: unknown; message?: unknown; name?: unknown; details?: unknown };
@@ -149,6 +153,7 @@ export function App() {
   );
   const [activeSection, setActiveSection] = useState<MainSection>("chat");
   const [activeAgentId, setActiveAgentId] = useState("");
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const safeError = useCallback((rawError: unknown) => {
     const mapped = toApiError(rawError);
@@ -222,6 +227,26 @@ export function App() {
     }
   }, [activeAgentId, agents]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia(MOBILE_NAV_MEDIA_QUERY);
+    const handleViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      if (!event.matches) {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    handleViewportChange(mediaQuery);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleViewportChange);
+      return () => mediaQuery.removeEventListener("change", handleViewportChange);
+    }
+    mediaQuery.addListener(handleViewportChange);
+    return () => mediaQuery.removeListener(handleViewportChange);
+  }, []);
+
   const handleLogin = useCallback(
     async (baseUrl: string, token: string) => {
       setSaving(true);
@@ -283,6 +308,12 @@ export function App() {
     () => agents.find((item) => item.id === activeAgentId) ?? null,
     [activeAgentId, agents],
   );
+  const handleSectionSelect = useCallback((section: MainSection) => {
+    setActiveSection(section);
+    if (isMobileViewport()) {
+      setIsMobileNavOpen(false);
+    }
+  }, []);
   const activeMeta = sectionMeta[activeSection];
   const overviewStats = [
     {
@@ -331,18 +362,28 @@ export function App() {
 
   return (
     <main className="console-shell">
-      <aside className="app-sidebar">
+      <aside className={isMobileNavOpen ? "app-sidebar mobile-nav-open" : "app-sidebar"}>
         <div className="app-brand">
-          <span className="app-brand-kicker">少女智能体控制台</span>
-          <h1>GirlAgent</h1>
-          <p>统一管理提供商、模型、智能体和对话会话的控制台。</p>
+          <div className="app-brand-main">
+            <span className="app-brand-kicker">少女智能体控制台</span>
+            <h1>GirlAgent</h1>
+          </div>
+          <button
+            aria-controls="console-nav"
+            aria-expanded={isMobileNavOpen}
+            className="app-sidebar-toggle"
+            onClick={() => setIsMobileNavOpen((current) => !current)}
+            type="button"
+          >
+            {isMobileNavOpen ? "收起" : "菜单"}
+          </button>
         </div>
-        <nav className="app-nav">
+        <nav className="app-nav" id="console-nav">
           {navItems.map((item) => (
             <button
               className={item.key === activeSection ? "app-nav-item active" : "app-nav-item"}
               key={item.key}
-              onClick={() => setActiveSection(item.key)}
+              onClick={() => handleSectionSelect(item.key)}
               type="button"
             >
               <span className="app-nav-label">{item.label}</span>
@@ -352,8 +393,7 @@ export function App() {
         </nav>
         <div className="app-sidebar-footer">
           <div className={backendStatus === "已连接" ? "sidebar-status-pill online" : "sidebar-status-pill"}>
-            <small>后端状态</small>
-            <strong>{backendStatus}</strong>
+            <span>后端：{backendStatus}</span>
           </div>
           <div className="sidebar-meta">
             <span>v{bootstrap.appVersion}</span>

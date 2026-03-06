@@ -103,16 +103,17 @@ p {
   z-index: 0;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 22px;
-  padding: 24px;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  padding: 30px 24px 24px;
 }
 
 .app-sidebar {
   position: sticky;
-  top: 24px;
-  height: calc(100vh - 48px);
-  padding: 22px 18px;
+  top: 30px;
+  height: calc(100vh - 54px);
+  min-height: 0;
+  padding: 16px 14px;
   border-radius: var(--radius-xl);
   background:
     radial-gradient(circle at top right, rgba(255, 122, 171, 0.28), transparent 25%),
@@ -123,8 +124,9 @@ p {
   box-shadow: 0 28px 60px rgba(23, 13, 47, 0.34);
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  overflow: hidden;
+  gap: 12px;
+  overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 .app-sidebar::before {
@@ -144,48 +146,107 @@ p {
 }
 
 .app-brand {
-  padding: 18px;
+  padding: 11px 13px;
   border-radius: calc(var(--radius-lg) + 2px);
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 6px;
+}
+
+.app-brand-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
 }
 
 .app-brand-kicker {
   display: inline-block;
-  margin-bottom: 10px;
-  padding: 6px 11px;
+  margin-bottom: 0;
+  width: fit-content;
+  padding: 4px 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   color: #f4ddff;
-  font-size: 11px;
+  font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .app-brand h1 {
-  font-size: 32px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: 0.02em;
 }
 
+.app-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(248, 244, 255, 0.96);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.app-sidebar-toggle:hover:not(:disabled) {
+  transform: none;
+  border-color: rgba(255, 205, 228, 0.48);
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .app-brand p {
-  margin-top: 10px;
+  margin-top: 8px;
   color: rgba(242, 237, 255, 0.74);
-  line-height: 1.65;
-  font-size: 14px;
+  line-height: 1.55;
+  font-size: 12px;
 }
 
 .app-nav {
   display: grid;
-  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 8px;
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-top: 4px;
+  padding-bottom: 6px;
+  padding-right: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 205, 228, 0.55) transparent;
+}
+
+.app-nav::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 191, 219, 0.82), rgba(142, 146, 255, 0.7));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.app-nav::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(255, 205, 228, 0.94), rgba(162, 166, 255, 0.82));
+  background-clip: padding-box;
 }
 
 .app-nav-item {
   text-align: left;
   display: grid;
   gap: 4px;
-  padding: 14px 15px;
+  padding: 13px 14px;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
@@ -227,29 +288,29 @@ p {
 .app-sidebar-footer {
   margin-top: auto;
   display: grid;
-  gap: 12px;
+  gap: 6px;
+  padding-top: 0;
+  flex-shrink: 0;
 }
 
 .sidebar-status-pill {
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 8px 12px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  display: grid;
-  gap: 8px;
+  display: flex;
+  align-items: center;
 }
 
 .sidebar-status-pill.online {
   background: linear-gradient(135deg, rgba(57, 167, 124, 0.18), rgba(91, 120, 255, 0.14));
 }
 
-.sidebar-status-pill small {
-  color: rgba(230, 220, 255, 0.72);
-  font-size: 11px;
-}
-
-.sidebar-status-pill strong {
-  font-size: 15px;
+.sidebar-status-pill span {
+  color: rgba(244, 240, 255, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .sidebar-meta {
@@ -257,7 +318,8 @@ p {
   justify-content: space-between;
   gap: 8px;
   color: rgba(232, 227, 245, 0.64);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .app-content {
@@ -1110,12 +1172,17 @@ button:disabled {
 @media (max-width: 1120px) {
   .console-shell {
     grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px;
   }
 
   .app-sidebar {
     position: relative;
     top: auto;
     height: auto;
+    max-height: none;
+    padding: 14px;
+    overflow: visible;
   }
 
   .login-stage {
@@ -1125,6 +1192,25 @@ button:disabled {
   .app-content,
   .app-sidebar {
     min-height: 0;
+  }
+
+  .app-nav {
+    overflow: visible;
+    padding-right: 0;
+    scrollbar-width: none;
+  }
+
+  .app-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-sidebar-footer {
+    margin-top: 0;
+  }
+
+  .app-content {
+    min-height: 0;
+    padding: 18px;
   }
 }
 
@@ -1139,6 +1225,57 @@ button:disabled {
   .login-brand-panel,
   .login-card {
     padding: 18px;
+  }
+
+  .app-sidebar {
+    gap: 10px;
+  }
+
+  .app-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    gap: 12px;
+  }
+
+  .app-sidebar-toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .app-nav {
+    display: none;
+    gap: 8px;
+    padding-bottom: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .app-sidebar.mobile-nav-open .app-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-nav-item {
+    min-width: 0;
+    padding: 12px 13px;
+  }
+
+  .app-sidebar-footer {
+    display: none;
+  }
+
+  .app-sidebar.mobile-nav-open .app-sidebar-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .sidebar-meta {
+    width: 100%;
   }
 
   .app-content-hero {
@@ -1159,20 +1296,117 @@ button:disabled {
   }
 
   .chat-session-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .panel-header .actions,
+  .settings-actions {
+    width: 100%;
+  }
+
+  .chat-window-header,
+  .chat-session-head,
+  .chat-bubble-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chat-window-status {
+    width: 100%;
+  }
+
+  .status-badge {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .chat-log {
+    min-height: 260px;
+    max-height: 360px;
+  }
+
+  .chat-actions > button,
+  .settings-actions > button {
+    flex: 1 1 180px;
   }
 }
 
 @media (max-width: 640px) {
+  .console-shell,
+  .login-page {
+    padding: 10px;
+  }
+
+  .app-content,
+  .app-sidebar,
+  .login-brand-panel,
+  .login-card {
+    padding: 14px;
+  }
+
   .app-brand h1,
   .login-brand-panel h1 {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .app-content-copy h2,
   .overview-hero-copy h3,
   .chat-window-header h3 {
-    font-size: 24px;
+    font-size: 22px;
+  }
+
+  .hero-chip,
+  .hero-chip-soft {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+
+  .app-content {
+    gap: 16px;
+  }
+
+  .app-content-hero,
+  .overview-hero-card,
+  .card,
+  .chat-window,
+  .chat-session-panel,
+  .chat-compose,
+  .login-brand-panel,
+  .login-card {
+    padding: 14px;
+  }
+
+  .hero-metric {
+    padding: 14px 12px;
+  }
+
+  .hero-metric strong {
+    font-size: 18px;
+  }
+
+  .overview-detail-card {
+    min-height: 0;
+  }
+
+  .compact-field,
+  .settings-copy,
+  .app-content-copy,
+  .overview-hero-copy {
+    gap: 8px;
+  }
+
+  .app-nav-item {
+    min-width: 0;
+    padding: 10px 12px;
+  }
+
+  .app-sidebar.mobile-nav-open .app-nav {
+    grid-template-columns: 1fr;
   }
 
   .app-nav-item,
@@ -1185,10 +1419,92 @@ button:disabled {
 
   .chat-window {
     min-height: 0;
-    padding: 16px;
   }
 
   .chat-bubble {
     width: 100%;
+  }
+
+  .chat-session-actions,
+  .chat-option-grid,
+  .chat-override-grid,
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-log {
+    min-height: 220px;
+    max-height: 320px;
+    padding: 14px;
+  }
+
+  .chat-bubble {
+    padding: 10px 12px;
+  }
+
+  .chat-bubble-actions {
+    width: 100%;
+  }
+
+  .chat-bubble-actions button,
+  .chat-actions > button,
+  .settings-actions > button,
+  .actions > button {
+    width: 100%;
+  }
+
+  .login-feature-list {
+    gap: 10px;
+  }
+
+  .login-feature-card {
+    padding: 12px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-sidebar {
+    border-radius: 22px;
+  }
+
+  .app-brand {
+    padding: 9px 10px;
+  }
+
+  .app-brand-kicker {
+    font-size: 8px;
+  }
+
+  .app-brand h1 {
+    font-size: 22px;
+  }
+
+  .app-nav-item {
+    min-width: 124px;
+  }
+
+  .sidebar-status-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sidebar-meta {
+    font-size: 10px;
+  }
+
+  .app-content-hero,
+  .overview-hero-card {
+    gap: 12px;
+  }
+
+  .chat-session-meta {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .chat-session-item,
+  .chat-compose,
+  .chat-session-panel {
+    padding: 12px;
   }
 }
