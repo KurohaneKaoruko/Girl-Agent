@@ -4,6 +4,8 @@ import type {
   ModelCapabilities,
   ModelCategory,
   ModelConfig,
+  ProbeModelConnectionRequest,
+  ProbeModelConnectionResponse,
   ProviderConfig,
   UpdateModelRequest,
 } from "@/types";
@@ -15,6 +17,7 @@ type Props = {
   onCreate: (input: CreateModelRequest) => Promise<void>;
   onUpdate: (id: string, input: UpdateModelRequest) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onProbe: (input: ProbeModelConnectionRequest) => Promise<ProbeModelConnectionResponse>;
 };
 
 const splitModes = (text: string) =>
@@ -369,9 +372,13 @@ export function ModelSettings({
   onCreate,
   onUpdate,
   onDelete,
+  onProbe,
 }: Props) {
   const [createForm, setCreateForm] = useState<CreateModelRequest>(defaultCreateForm);
+  const [showCreate, setShowCreate] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, UpdateModelRequest>>({});
+  const [probing, setProbing] = useState<Record<string, boolean>>({});
+  const [probeResults, setProbeResults] = useState<Record<string, ProbeModelConnectionResponse>>({});
 
   useEffect(() => {
     const next: Record<string, UpdateModelRequest> = {};
@@ -390,32 +397,44 @@ export function ModelSettings({
     <section className="panel">
       <header className="panel-header">
         <h2>模型设置</h2>
-      </header>
-
-      <article className="card">
-        <ModelForm
-          onChange={(value) => setCreateForm(value as CreateModelRequest)}
-          providers={providers}
-          title="新增模型"
-          value={createForm}
-        />
         <button
           className="primary"
-          disabled={saving}
-          onClick={async () => {
-            await onCreate(createForm);
-            setCreateForm(defaultCreateForm());
-          }}
+          onClick={() => setShowCreate((current) => !current)}
           type="button"
         >
-          新建模型
+          {showCreate ? "收起新增" : "新增"}
         </button>
-      </article>
+      </header>
+
+      {showCreate && (
+        <article className="card">
+          <ModelForm
+            onChange={(value) => setCreateForm(value as CreateModelRequest)}
+            providers={providers}
+            title="新增模型"
+            value={createForm}
+          />
+          <button
+            className="primary"
+            disabled={saving}
+            onClick={async () => {
+              await onCreate(createForm);
+              setCreateForm(defaultCreateForm());
+              setShowCreate(false);
+            }}
+            type="button"
+          >
+            新建模型
+          </button>
+        </article>
+      )}
 
       <div className="stack">
         {models.map((model) => {
           const draft = drafts[model.id];
           if (!draft) return null;
+          const probeRunning = probing[model.id] ?? false;
+          const probeResult = probeResults[model.id];
           return (
             <article className="card" key={model.id}>
               <ModelForm
@@ -430,6 +449,40 @@ export function ModelSettings({
                 value={draft}
               />
               <div className="actions">
+                <button
+                  className="ghost"
+                  disabled={saving || probeRunning}
+                  onClick={async () => {
+                    setProbing((current) => ({ ...current, [model.id]: true }));
+                    try {
+                      const result = await onProbe({ modelRefId: model.id });
+                      setProbeResults((current) => ({ ...current, [model.id]: result }));
+                    } catch (error) {
+                      const message =
+                        typeof error === "object" &&
+                        error !== null &&
+                        "message" in error &&
+                        typeof (error as Record<string, unknown>).message === "string"
+                          ? ((error as Record<string, unknown>).message as string)
+                          : "探测失败";
+                      setProbeResults((current) => ({
+                        ...current,
+                        [model.id]: {
+                          modelRefId: model.id,
+                          modelId: model.modelId,
+                          reachable: false,
+                          latencyMs: 0,
+                          detail: message,
+                        },
+                      }));
+                    } finally {
+                      setProbing((current) => ({ ...current, [model.id]: false }));
+                    }
+                  }}
+                  type="button"
+                >
+                  {probeRunning ? "探测中..." : "连通测试"}
+                </button>
                 <button
                   className="primary"
                   disabled={saving}
@@ -447,6 +500,12 @@ export function ModelSettings({
                   删除
                 </button>
               </div>
+              {probeResult && (
+                <small className={probeResult.reachable ? "hint" : "error-inline"}>
+                  探测结果：{probeResult.reachable ? "可达" : "不可达"} · {probeResult.latencyMs}ms ·{" "}
+                  {probeResult.detail}
+                </small>
+              )}
             </article>
           );
         })}

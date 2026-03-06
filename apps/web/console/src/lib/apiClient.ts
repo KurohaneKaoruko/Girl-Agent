@@ -11,10 +11,15 @@ import type {
   CreateModelRequest,
   CreateProviderRequest,
   ModelConfig,
+  ProbeModelConnectionRequest,
+  ProbeModelConnectionResponse,
+  ProbeProviderConnectionRequest,
+  ProbeProviderConnectionResponse,
   ProviderConfig,
   RegenerateChatReplyRequest,
   RewriteChatUserMessageRequest,
   RewriteLastUserMessageRequest,
+  RuntimeStatusResponse,
   UndoLastChatTurnRequest,
   UndoLastChatTurnResponse,
   UpdateAgentRequest,
@@ -24,14 +29,19 @@ import type {
 
 export type ApiClient = {
   getBootstrap(): Promise<AppBootstrap>;
+  getRuntimeStatus(): Promise<RuntimeStatusResponse>;
   listProviders(): Promise<ProviderConfig[]>;
   createProvider(input: CreateProviderRequest): Promise<ProviderConfig>;
   updateProvider(id: string, input: UpdateProviderRequest): Promise<ProviderConfig>;
   deleteProvider(id: string): Promise<void>;
+  probeProviderConnection(
+    input: ProbeProviderConnectionRequest,
+  ): Promise<ProbeProviderConnectionResponse>;
   listModels(): Promise<ModelConfig[]>;
   createModel(input: CreateModelRequest): Promise<ModelConfig>;
   updateModel(id: string, input: UpdateModelRequest): Promise<ModelConfig>;
   deleteModel(id: string): Promise<void>;
+  probeModelConnection(input: ProbeModelConnectionRequest): Promise<ProbeModelConnectionResponse>;
   listAgents(): Promise<AgentConfig[]>;
   createAgent(input: CreateAgentRequest): Promise<AgentConfig>;
   updateAgent(id: string, input: UpdateAgentRequest): Promise<AgentConfig>;
@@ -40,11 +50,13 @@ export type ApiClient = {
   chatWithAgentStream(
     input: ChatWithAgentRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ): Promise<ChatWithAgentResponse>;
   regenerateChatReply(input: RegenerateChatReplyRequest): Promise<ChatWithAgentResponse>;
   regenerateChatReplyStream(
     input: RegenerateChatReplyRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ): Promise<ChatWithAgentResponse>;
   undoLastChatTurn(input: UndoLastChatTurnRequest): Promise<UndoLastChatTurnResponse>;
   rewriteChatUserMessage(input: RewriteChatUserMessageRequest): Promise<ChatWithAgentResponse>;
@@ -87,7 +99,32 @@ export function setHeadlessConfig(baseUrl: string, token: string) {
   localStorage.setItem(HEADLESS_TOKEN_KEY, token.trim());
 }
 
+function isAbortLikeError(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") {
+    return false;
+  }
+
+  const payload = raw as { name?: unknown; code?: unknown; message?: unknown };
+  if (payload.code === "STREAM_ABORTED") {
+    return true;
+  }
+  if (payload.name === "AbortError") {
+    return true;
+  }
+  if (typeof payload.message === "string" && payload.message.toLowerCase().includes("abort")) {
+    return true;
+  }
+  return false;
+}
+
 function mapError(raw: unknown): ApiError {
+  if (isAbortLikeError(raw)) {
+    return {
+      code: "STREAM_ABORTED",
+      message: "已停止生成",
+    };
+  }
+
   if (typeof raw === "object" && raw !== null) {
     const maybePayload = raw as Record<string, unknown>;
     const code = maybePayload.code;
@@ -153,6 +190,27 @@ function parseSsePacket(packet: string): { event: string; data: string } | null 
   };
 }
 
+function readSsePacket(buffered: string): { packet: string; rest: string } | null {
+  const crlfSeparatorIndex = buffered.indexOf("\r\n\r\n");
+  const lfSeparatorIndex = buffered.indexOf("\n\n");
+
+  if (crlfSeparatorIndex < 0 && lfSeparatorIndex < 0) {
+    return null;
+  }
+
+  if (crlfSeparatorIndex >= 0 && (lfSeparatorIndex < 0 || crlfSeparatorIndex < lfSeparatorIndex)) {
+    return {
+      packet: buffered.slice(0, crlfSeparatorIndex),
+      rest: buffered.slice(crlfSeparatorIndex + 4),
+    };
+  }
+
+  return {
+    packet: buffered.slice(0, lfSeparatorIndex),
+    rest: buffered.slice(lfSeparatorIndex + 2),
+  };
+}
+
 async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(command, args);
@@ -164,6 +222,10 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
 class DesktopClient implements ApiClient {
   getBootstrap() {
     return invokeCommand<AppBootstrap>("get_bootstrap_data");
+  }
+
+  getRuntimeStatus() {
+    return invokeCommand<RuntimeStatusResponse>("get_runtime_status");
   }
 
   listProviders() {
@@ -182,6 +244,10 @@ class DesktopClient implements ApiClient {
     return invokeCommand<void>("delete_provider", { id });
   }
 
+  probeProviderConnection(input: ProbeProviderConnectionRequest) {
+    return invokeCommand<ProbeProviderConnectionResponse>("probe_provider_connection", { input });
+  }
+
   listModels() {
     return invokeCommand<ModelConfig[]>("list_models");
   }
@@ -196,6 +262,10 @@ class DesktopClient implements ApiClient {
 
   deleteModel(id: string) {
     return invokeCommand<void>("delete_model", { id });
+  }
+
+  probeModelConnection(input: ProbeModelConnectionRequest) {
+    return invokeCommand<ProbeModelConnectionResponse>("probe_model_connection", { input });
   }
 
   listAgents() {
@@ -218,8 +288,24 @@ class DesktopClient implements ApiClient {
     return invokeCommand<ChatWithAgentResponse>("chat_with_agent", { input });
   }
 
-  async chatWithAgentStream(input: ChatWithAgentRequest, onDelta: (chunk: string) => void) {
+  async chatWithAgentStream(
+    input: ChatWithAgentRequest,
+    onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
+  ) {
+    if (signal?.aborted) {
+      throw {
+        code: "STREAM_ABORTED",
+        message: "已停止生成",
+      } satisfies ApiError;
+    }
     const result = await this.chatWithAgent(input);
+    if (signal?.aborted) {
+      throw {
+        code: "STREAM_ABORTED",
+        message: "已停止生成",
+      } satisfies ApiError;
+    }
     if (result.message) {
       onDelta(result.message);
     }
@@ -233,8 +319,21 @@ class DesktopClient implements ApiClient {
   async regenerateChatReplyStream(
     input: RegenerateChatReplyRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ) {
+    if (signal?.aborted) {
+      throw {
+        code: "STREAM_ABORTED",
+        message: "已停止生成",
+      } satisfies ApiError;
+    }
     const result = await this.regenerateChatReply(input);
+    if (signal?.aborted) {
+      throw {
+        code: "STREAM_ABORTED",
+        message: "已停止生成",
+      } satisfies ApiError;
+    }
     if (result.message) {
       onDelta(result.message);
     }
@@ -364,6 +463,10 @@ class HeadlessClient implements ApiClient {
     return this.request<AppBootstrap>("/api/bootstrap");
   }
 
+  getRuntimeStatus() {
+    return this.request<RuntimeStatusResponse>("/api/runtime/status");
+  }
+
   listProviders() {
     return this.request<ProviderConfig[]>("/api/providers");
   }
@@ -386,6 +489,13 @@ class HeadlessClient implements ApiClient {
     return this.request<void>(`/api/providers/${id}`, { method: "DELETE" });
   }
 
+  probeProviderConnection(input: ProbeProviderConnectionRequest) {
+    return this.request<ProbeProviderConnectionResponse>("/api/runtime/provider-probe", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
   listModels() {
     return this.request<ModelConfig[]>("/api/models");
   }
@@ -406,6 +516,13 @@ class HeadlessClient implements ApiClient {
 
   deleteModel(id: string) {
     return this.request<void>(`/api/models/${id}`, { method: "DELETE" });
+  }
+
+  probeModelConnection(input: ProbeModelConnectionRequest) {
+    return this.request<ProbeModelConnectionResponse>("/api/runtime/model-probe", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 
   listAgents() {
@@ -469,6 +586,7 @@ class HeadlessClient implements ApiClient {
     path: string,
     input: ChatWithAgentRequest | RegenerateChatReplyRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ) {
     const { baseUrl, token } = getHeadlessConfig();
     const headers = new Headers();
@@ -478,11 +596,23 @@ class HeadlessClient implements ApiClient {
       headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(input),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(input),
+        signal,
+      });
+    } catch (error) {
+      if (isAbortLikeError(error) || signal?.aborted) {
+        throw {
+          code: "STREAM_ABORTED",
+          message: "已停止生成",
+        } satisfies ApiError;
+      }
+      throw mapError(error);
+    }
 
     if (!response.ok) {
       let payload: ApiError | undefined;
@@ -511,42 +641,59 @@ class HeadlessClient implements ApiClient {
     let buffered = "";
     let finalResponse: ChatWithAgentResponse | null = null;
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
+    const processPacket = (packet: string) => {
+      const parsed = parseSsePacket(packet);
+      if (!parsed) return;
 
-      buffered += decoder.decode(value, { stream: true });
-      while (true) {
-        const separatorIndex = buffered.indexOf("\n\n");
-        if (separatorIndex < 0) break;
-
-        const packet = buffered.slice(0, separatorIndex);
-        buffered = buffered.slice(separatorIndex + 2);
-        const parsed = parseSsePacket(packet);
-        if (!parsed) continue;
-
-        if (parsed.event === "delta") {
-          try {
-            const payload = JSON.parse(parsed.data) as { text?: string };
-            if (payload.text) {
-              onDelta(payload.text);
-            }
-          } catch {
-            continue;
+      if (parsed.event === "delta") {
+        try {
+          const payload = JSON.parse(parsed.data) as { text?: string };
+          if (payload.text) {
+            onDelta(payload.text);
           }
-        }
-
-        if (parsed.event === "done") {
-          try {
-            finalResponse = JSON.parse(parsed.data) as ChatWithAgentResponse;
-          } catch {
-            throw {
-              code: "STREAM_ERROR",
-              message: "invalid done payload",
-            } satisfies ApiError;
-          }
+        } catch {
+          return;
         }
       }
+
+      if (parsed.event === "done") {
+        try {
+          finalResponse = JSON.parse(parsed.data) as ChatWithAgentResponse;
+        } catch {
+          throw {
+            code: "STREAM_ERROR",
+            message: "invalid done payload",
+          } satisfies ApiError;
+        }
+      }
+    };
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffered += decoder.decode(value, { stream: true });
+        while (true) {
+          const readResult = readSsePacket(buffered);
+          if (!readResult) break;
+          buffered = readResult.rest;
+          processPacket(readResult.packet);
+        }
+      }
+    } catch (error) {
+      if (isAbortLikeError(error) || signal?.aborted) {
+        throw {
+          code: "STREAM_ABORTED",
+          message: "已停止生成",
+        } satisfies ApiError;
+      }
+      throw mapError(error);
+    }
+
+    const tailPacket = buffered.trim();
+    if (tailPacket.length > 0) {
+      processPacket(tailPacket);
     }
 
     if (!finalResponse) {
@@ -559,15 +706,20 @@ class HeadlessClient implements ApiClient {
     return finalResponse;
   }
 
-  async chatWithAgentStream(input: ChatWithAgentRequest, onDelta: (chunk: string) => void) {
-    return this.streamChatResponse("/api/chat/stream", input, onDelta);
+  async chatWithAgentStream(
+    input: ChatWithAgentRequest,
+    onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
+  ) {
+    return this.streamChatResponse("/api/chat/stream", input, onDelta, signal);
   }
 
   async regenerateChatReplyStream(
     input: RegenerateChatReplyRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ) {
-    return this.streamChatResponse("/api/chat/regenerate/stream", input, onDelta);
+    return this.streamChatResponse("/api/chat/regenerate/stream", input, onDelta, signal);
   }
 
   listAgentChatSessions(agentId: string) {

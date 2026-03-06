@@ -4,8 +4,10 @@ use girlagent_core::{
     AppResult, AppService, ChatMessage, ChatSession, ChatWithAgentRequest, ChatWithAgentResponse,
     CreateAgentRequest, CreateModelRequest, CreateProviderRequest, ErrorPayload,
     OpenAICompatChatGateway, RegenerateChatReplyRequest, RewriteChatUserMessageRequest,
-    RewriteLastUserMessageRequest, SqliteStore, UndoLastChatTurnRequest,
-    UndoLastChatTurnResponse, UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
+    RewriteLastUserMessageRequest, RuntimeStatusResponse, ProbeModelConnectionRequest,
+    ProbeModelConnectionResponse, ProbeProviderConnectionRequest, ProbeProviderConnectionResponse,
+    SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse, UpdateAgentRequest,
+    UpdateModelRequest, UpdateProviderRequest,
 };
 use tauri::State;
 
@@ -38,6 +40,11 @@ async fn get_bootstrap_data(
 }
 
 #[tauri::command]
+async fn get_runtime_status(state: State<'_, AppState>) -> CommandResult<RuntimeStatusResponse> {
+    map_command_result(state.service.runtime_status().await)
+}
+
+#[tauri::command]
 async fn list_providers(
     state: State<'_, AppState>,
 ) -> CommandResult<Vec<girlagent_core::ProviderConfig>> {
@@ -67,6 +74,14 @@ async fn delete_provider(state: State<'_, AppState>, id: String) -> CommandResul
 }
 
 #[tauri::command]
+async fn probe_provider_connection(
+    state: State<'_, AppState>,
+    input: ProbeProviderConnectionRequest,
+) -> CommandResult<ProbeProviderConnectionResponse> {
+    map_command_result(state.service.probe_provider_connection(input).await)
+}
+
+#[tauri::command]
 async fn list_models(
     state: State<'_, AppState>,
 ) -> CommandResult<Vec<girlagent_core::ModelConfig>> {
@@ -93,6 +108,19 @@ async fn update_model(
 #[tauri::command]
 async fn delete_model(state: State<'_, AppState>, id: String) -> CommandResult<()> {
     map_command_result(state.service.delete_model(&id).await)
+}
+
+#[tauri::command]
+async fn probe_model_connection(
+    state: State<'_, AppState>,
+    input: ProbeModelConnectionRequest,
+) -> CommandResult<ProbeModelConnectionResponse> {
+    map_command_result(
+        state
+            .service
+            .probe_model_connection(&state.chat_gateway, input)
+            .await,
+    )
 }
 
 #[tauri::command]
@@ -352,14 +380,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ping,
             get_bootstrap_data,
+            get_runtime_status,
             list_providers,
             create_provider,
             update_provider,
             delete_provider,
+            probe_provider_connection,
             list_models,
             create_model,
             update_model,
             delete_model,
+            probe_model_connection,
             list_agents,
             create_agent,
             update_agent,

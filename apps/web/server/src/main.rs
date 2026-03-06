@@ -14,9 +14,11 @@ use girlagent_core::{
     AppError, AppService, ChatWithAgentRequest, ChatWithAgentResponse, CreateAgentRequest,
     CreateChatSessionRequest, CreateModelRequest, CreateProviderRequest, DuplicateChatSessionRequest,
     OpenAICompatChatGateway, RegenerateChatReplyRequest, RenameChatSessionRequest,
-    RewriteChatUserMessageRequest, RewriteLastUserMessageRequest, SetChatSessionArchivedRequest,
-    SetChatSessionPinnedRequest, SetChatSessionTagsRequest, SqliteStore, UndoLastChatTurnRequest,
-    UndoLastChatTurnResponse, UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
+    ProbeModelConnectionRequest, ProbeModelConnectionResponse, ProbeProviderConnectionRequest,
+    ProbeProviderConnectionResponse, RewriteChatUserMessageRequest, RewriteLastUserMessageRequest,
+    RuntimeStatusResponse, SetChatSessionArchivedRequest, SetChatSessionPinnedRequest,
+    SetChatSessionTagsRequest, SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse,
+    UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
 };
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
@@ -59,6 +61,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn build_router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/api/bootstrap", get(get_bootstrap))
+        .route("/api/runtime/status", get(get_runtime_status))
+        .route("/api/runtime/provider-probe", post(probe_provider_connection))
+        .route("/api/runtime/model-probe", post(probe_model_connection))
         .route("/api/providers", get(list_providers).post(create_provider))
         .route(
             "/api/providers/{id}",
@@ -164,6 +169,10 @@ async fn get_bootstrap(
     state.service.bootstrap().await.map(Json).map_err(map_error)
 }
 
+async fn get_runtime_status(State(state): State<AppState>) -> ApiResponse<RuntimeStatusResponse> {
+    state.service.runtime_status().await.map(Json).map_err(map_error)
+}
+
 async fn list_providers(
     State(state): State<AppState>,
 ) -> ApiResponse<Vec<girlagent_core::ProviderConfig>> {
@@ -212,6 +221,18 @@ async fn delete_provider(
         .map_err(map_error)
 }
 
+async fn probe_provider_connection(
+    State(state): State<AppState>,
+    Json(input): Json<ProbeProviderConnectionRequest>,
+) -> ApiResponse<ProbeProviderConnectionResponse> {
+    state
+        .service
+        .probe_provider_connection(input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
 async fn list_models(
     State(state): State<AppState>,
 ) -> ApiResponse<Vec<girlagent_core::ModelConfig>> {
@@ -257,6 +278,18 @@ async fn delete_model(
         .delete_model(&id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn probe_model_connection(
+    State(state): State<AppState>,
+    Json(input): Json<ProbeModelConnectionRequest>,
+) -> ApiResponse<ProbeModelConnectionResponse> {
+    state
+        .service
+        .probe_model_connection(&state.chat_gateway, input)
+        .await
+        .map(Json)
         .map_err(map_error)
 }
 
@@ -610,4 +643,29 @@ fn split_stream_chunks(text: &str, chunk_size: usize) -> Vec<String> {
         output.push(current);
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_stream_chunks;
+
+    #[test]
+    fn split_chunks_by_max_char_count() {
+        let chunks = split_stream_chunks("abcdefghijkl", 5);
+        assert_eq!(chunks, vec!["abcde", "fghij", "kl"]);
+    }
+
+    #[test]
+    fn split_chunks_supports_unicode() {
+        let source = "你好世界abc";
+        let chunks = split_stream_chunks(source, 2);
+        assert_eq!(chunks.concat(), source);
+        assert!(chunks.iter().all(|item| item.chars().count() <= 2));
+    }
+
+    #[test]
+    fn split_chunks_returns_empty_for_empty_text_or_zero_size() {
+        assert!(split_stream_chunks("", 8).is_empty());
+        assert!(split_stream_chunks("abc", 0).is_empty());
+    }
 }

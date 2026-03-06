@@ -4,6 +4,16 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_full:
+        description: "Run headless full verification (requires GIRLAGENT_PROVIDER_KEY)"
+        type: boolean
+        default: false
+      run_abort:
+        description: "Run headless full abort verification (requires GIRLAGENT_PROVIDER_KEY)"
+        type: boolean
+        default: false
 
 jobs:
   rust:
@@ -43,3 +53,50 @@ jobs:
         run: pnpm install --frozen-lockfile=false
       - name: Build console
         run: pnpm --dir apps/web/console build
+
+  headless-verify:
+    name: Headless Verify
+    runs-on: ubuntu-latest
+    env:
+      GIRLAGENT_PROVIDER_KEY: ${{ secrets.GIRLAGENT_PROVIDER_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+      - name: Ensure target directory
+        run: mkdir -p target
+      - name: Validate provider key for requested full checks
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_full || inputs.run_abort) && env.GIRLAGENT_PROVIDER_KEY == '' }}
+        run: |
+          echo "GIRLAGENT_PROVIDER_KEY secret is required for full checks." >&2
+          exit 1
+      - name: Verify headless smoke
+        run: pwsh -NoProfile -Command "& './scripts/verify-headless.ps1' -Mode smoke -OutputJson './target/verify-headless-smoke.json'"
+      - name: Verify headless full
+        if: ${{ env.GIRLAGENT_PROVIDER_KEY != '' && (github.event_name != 'workflow_dispatch' || inputs.run_full || inputs.run_abort) }}
+        run: pwsh -NoProfile -Command "& './scripts/verify-headless.ps1' -Mode full -OutputJson './target/verify-headless-full.json'"
+      - name: Verify headless full abort
+        if: ${{ env.GIRLAGENT_PROVIDER_KEY != '' && (github.event_name != 'workflow_dispatch' || inputs.run_abort) }}
+        run: pwsh -NoProfile -Command "& './scripts/verify-headless.ps1' -Mode full -VerifyStreamAbort -OutputJson './target/verify-headless-full-abort.json'"
+      - name: Generate verify summary
+        if: always()
+        run: node ./scripts/collect-verify-results.mjs
+      - name: Upload headless verify artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-verify-${{ github.run_id }}
+          path: |
+            target/verify-headless-smoke.json
+            target/verify-headless-full.json
+            target/verify-headless-full-abort.json
+            target/verify-headless-summary.json
+          if-no-files-found: warn

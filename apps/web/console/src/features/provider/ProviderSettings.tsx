@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   CreateProviderRequest,
+  ProbeProviderConnectionRequest,
+  ProbeProviderConnectionResponse,
   ProviderConfig,
   ProviderPreset,
   UpdateProviderRequest,
@@ -13,6 +15,7 @@ type Props = {
   onCreate: (input: CreateProviderRequest) => Promise<void>;
   onUpdate: (id: string, input: UpdateProviderRequest) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onProbe: (input: ProbeProviderConnectionRequest) => Promise<ProbeProviderConnectionResponse>;
 };
 
 const toUpdateRequest = (provider: ProviderConfig): UpdateProviderRequest => ({
@@ -38,6 +41,7 @@ export function ProviderSettings({
   onCreate,
   onUpdate,
   onDelete,
+  onProbe,
 }: Props) {
   const presetMap = useMemo(
     () => Object.fromEntries(presets.map((preset) => [preset.id, preset])),
@@ -46,7 +50,12 @@ export function ProviderSettings({
   const [createForm, setCreateForm] = useState<CreateProviderRequest>(() =>
     emptyCreateRequest(presets[0]),
   );
+  const [showCreate, setShowCreate] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, UpdateProviderRequest>>({});
+  const [probing, setProbing] = useState<Record<string, boolean>>({});
+  const [probeResults, setProbeResults] = useState<
+    Record<string, ProbeProviderConnectionResponse | undefined>
+  >({});
 
   useEffect(() => {
     const next: Record<string, UpdateProviderRequest> = {};
@@ -91,105 +100,117 @@ export function ProviderSettings({
     <section className="panel">
       <header className="panel-header">
         <h2>模型提供商设置</h2>
-      </header>
-
-      <article className="card">
-        <h3>新增提供商配置</h3>
-        <div className="field-grid">
-          <label>
-            设置项名称
-            <input
-              value={createForm.displayName}
-              onChange={(event) =>
-                setCreateForm((current) => ({
-                  ...current,
-                  displayName: event.target.value,
-                }))
-              }
-              placeholder="例如：OpenAI 主力池"
-            />
-          </label>
-
-          <label>
-            提供商类型
-            <select
-              value={createForm.providerKind}
-              onChange={(event) => {
-                const preset = presetMap[event.target.value];
-                setCreateForm((current) => ({
-                  ...current,
-                  providerKind: event.target.value,
-                  apiBase: preset?.apiBase ?? current.apiBase,
-                }));
-              }}
-            >
-              <option value="">请选择</option>
-              {presets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <label>
-          API Base URL
-          <input
-            value={createForm.apiBase}
-            onChange={(event) =>
-              setCreateForm((current) => ({
-                ...current,
-                apiBase: event.target.value,
-              }))
-            }
-            placeholder="https://api.example.com/v1"
-          />
-        </label>
-
-        <div className="sub-header">
-          <strong>Key 池</strong>
-          <button
-            className="ghost"
-            onClick={() => setCreateForm((current) => addKey(current))}
-            type="button"
-          >
-            新增 Key
-          </button>
-        </div>
-
-        <div className="stack">
-          {createForm.keys.map((key, index) => (
-            <input
-              key={`create-key-${index}`}
-              value={key}
-              onChange={(event) =>
-                setCreateForm((current) => updateKeys(current, index, event.target.value))
-              }
-              placeholder={`Key #${index + 1}`}
-              type="password"
-            />
-          ))}
-        </div>
-
         <button
           className="primary"
-          disabled={saving}
-          onClick={async () => {
-            await onCreate(createForm);
-            setCreateForm(emptyCreateRequest(presets[0]));
-          }}
+          onClick={() => setShowCreate((current) => !current)}
           type="button"
         >
-          新建提供商配置
+          {showCreate ? "收起新增" : "新增"}
         </button>
-      </article>
+      </header>
+
+      {showCreate && (
+        <article className="card">
+          <h3>新增提供商配置</h3>
+          <div className="field-grid">
+            <label>
+              设置项名称
+              <input
+                value={createForm.displayName}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }))
+                }
+                placeholder="例如：OpenAI 主力池"
+              />
+            </label>
+
+            <label>
+              提供商类型
+              <select
+                value={createForm.providerKind}
+                onChange={(event) => {
+                  const preset = presetMap[event.target.value];
+                  setCreateForm((current) => ({
+                    ...current,
+                    providerKind: event.target.value,
+                    apiBase: preset?.apiBase ?? current.apiBase,
+                  }));
+                }}
+              >
+                <option value="">请选择</option>
+                {presets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label>
+            API Base URL
+            <input
+              value={createForm.apiBase}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  apiBase: event.target.value,
+                }))
+              }
+              placeholder="https://api.example.com/v1"
+            />
+          </label>
+
+          <div className="sub-header">
+            <strong>Key 池</strong>
+            <button
+              className="ghost"
+              onClick={() => setCreateForm((current) => addKey(current))}
+              type="button"
+            >
+              新增 Key
+            </button>
+          </div>
+
+          <div className="stack">
+            {createForm.keys.map((key, index) => (
+              <input
+                key={`create-key-${index}`}
+                value={key}
+                onChange={(event) =>
+                  setCreateForm((current) => updateKeys(current, index, event.target.value))
+                }
+                placeholder={`Key #${index + 1}`}
+                type="password"
+              />
+            ))}
+          </div>
+
+          <button
+            className="primary"
+            disabled={saving}
+            onClick={async () => {
+              await onCreate(createForm);
+              setCreateForm(emptyCreateRequest(presets[0]));
+              setShowCreate(false);
+            }}
+            type="button"
+          >
+            新建提供商配置
+          </button>
+        </article>
+      )}
 
       <div className="stack">
         {providers.map((provider) => {
           const draft = drafts[provider.id];
           if (!draft) return null;
           const preset = presetMap[draft.providerKind];
+          const probeResult = probeResults[provider.id];
+          const probeRunning = probing[provider.id] ?? false;
 
           return (
             <article className="card" key={provider.id}>
@@ -292,6 +313,39 @@ export function ProviderSettings({
 
               <div className="actions">
                 <button
+                  className="ghost"
+                  disabled={saving || probeRunning}
+                  onClick={async () => {
+                    setProbing((current) => ({ ...current, [provider.id]: true }));
+                    try {
+                      const result = await onProbe({ providerId: provider.id });
+                      setProbeResults((current) => ({ ...current, [provider.id]: result }));
+                    } catch (error) {
+                      const message =
+                        typeof error === "object" &&
+                        error !== null &&
+                        "message" in error &&
+                        typeof (error as Record<string, unknown>).message === "string"
+                          ? ((error as Record<string, unknown>).message as string)
+                          : "探测失败";
+                      setProbeResults((current) => ({
+                        ...current,
+                        [provider.id]: {
+                          providerId: provider.id,
+                          reachable: false,
+                          latencyMs: 0,
+                          detail: message,
+                        },
+                      }));
+                    } finally {
+                      setProbing((current) => ({ ...current, [provider.id]: false }));
+                    }
+                  }}
+                  type="button"
+                >
+                  {probeRunning ? "探测中..." : "连通测试"}
+                </button>
+                <button
                   className="primary"
                   disabled={saving}
                   onClick={() => onUpdate(provider.id, draft)}
@@ -308,6 +362,12 @@ export function ProviderSettings({
                   删除
                 </button>
               </div>
+              {probeResult && (
+                <small className={probeResult.reachable ? "hint" : "error-inline"}>
+                  探测结果：{probeResult.reachable ? "可达" : "不可达"} · {probeResult.latencyMs}ms ·{" "}
+                  {probeResult.detail}
+                </small>
+              )}
             </article>
           );
         })}

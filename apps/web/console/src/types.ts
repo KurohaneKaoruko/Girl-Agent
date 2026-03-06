@@ -8,6 +8,7 @@ export type ProviderPreset = {
 export type AppBootstrap = {
   appName: string;
   appVersion: string;
+  apiVersion: string;
   providerPresets: ProviderPreset[];
 };
 
@@ -35,6 +36,29 @@ export type CreateProviderRequest = {
 };
 
 export type UpdateProviderRequest = CreateProviderRequest;
+
+export type RuntimeStatusResponse = {
+  appName: string;
+  appVersion: string;
+  apiVersion: string;
+  chatGatewayKind: string;
+  providerCount: number;
+  modelCount: number;
+  agentCount: number;
+  sessionCount: number;
+  messageCount: number;
+};
+
+export type ProbeProviderConnectionRequest = {
+  providerId: string;
+};
+
+export type ProbeProviderConnectionResponse = {
+  providerId: string;
+  reachable: boolean;
+  latencyMs: number;
+  detail: string;
+};
 
 export type ModelCategory = "llm" | "vlm" | "asr" | "tts";
 
@@ -72,6 +96,18 @@ export type ModelConfig = {
 
 export type CreateModelRequest = Omit<ModelConfig, "id">;
 export type UpdateModelRequest = CreateModelRequest;
+
+export type ProbeModelConnectionRequest = {
+  modelRefId: string;
+};
+
+export type ProbeModelConnectionResponse = {
+  modelRefId: string;
+  modelId: string;
+  reachable: boolean;
+  latencyMs: number;
+  detail: string;
+};
 
 export type AgentMode = "chat" | "ambient";
 

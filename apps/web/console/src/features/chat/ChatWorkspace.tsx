@@ -14,16 +14,19 @@ import type {
 
 type Props = {
   agents: AgentConfig[];
+  focusedAgentId?: string | null;
   disabled: boolean;
   onChat: (input: ChatWithAgentRequest) => Promise<ChatWithAgentResponse>;
   onChatStream: (
     input: ChatWithAgentRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ) => Promise<ChatWithAgentResponse>;
   onRegenerate: (input: RegenerateChatReplyRequest) => Promise<ChatWithAgentResponse>;
   onRegenerateStream: (
     input: RegenerateChatReplyRequest,
     onDelta: (chunk: string) => void,
+    signal?: AbortSignal,
   ) => Promise<ChatWithAgentResponse>;
   onRewriteUserMessage: (input: RewriteChatUserMessageRequest) => Promise<ChatWithAgentResponse>;
   onUndoLastTurn: (input: UndoLastChatTurnRequest) => Promise<UndoLastChatTurnResponse>;
@@ -57,6 +60,7 @@ type AgentChatWindow = {
   regenerateReplaceLastAssistant: boolean;
   lastModelId: string;
   sending: boolean;
+  streaming: boolean;
   rewriting: boolean;
   undoing: boolean;
   loadingSessions: boolean;
@@ -112,6 +116,7 @@ const createEmptyWindow = (preference?: WindowPreference): AgentChatWindow => ({
   regenerateReplaceLastAssistant: preference?.regenerateReplaceLastAssistant ?? true,
   lastModelId: "",
   sending: false,
+  streaming: false,
   rewriting: false,
   undoing: false,
   loadingSessions: true,
@@ -131,6 +136,12 @@ const parseOptionalNumber = (raw: string): number | null => {
 };
 
 const toApiError = (error: unknown): ApiError => {
+  if (typeof error === "object" && error !== null) {
+    const payload = error as { code?: unknown; name?: unknown; message?: unknown };
+    if (payload.code === "STREAM_ABORTED" || payload.name === "AbortError") {
+      return { code: "STREAM_ABORTED", message: "已停止生成" };
+    }
+  }
   if (typeof error === "object" && error !== null) {
     const payload = error as Record<string, unknown>;
     if (typeof payload.code === "string" && typeof payload.message === "string") {
@@ -172,6 +183,7 @@ const formatSessionFileName = (agentName: string, sessionTitle: string): string 
 
 export function ChatWorkspace({
   agents,
+  focusedAgentId = null,
   disabled,
   onChat,
   onChatStream,
@@ -197,6 +209,23 @@ export function ChatWorkspace({
   const messageLoadRef = useRef<Record<string, string>>({});
   const chatLogRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const preferencesRef = useRef<Record<string, WindowPreference>>(loadPreferences());
+  const streamAbortRef = useRef<Record<string, AbortController | null>>({});
+
+  const beginStream = (agentId: string) => {
+    const previous = streamAbortRef.current[agentId];
+    if (previous) {
+      previous.abort();
+    }
+    const next = new AbortController();
+    streamAbortRef.current[agentId] = next;
+    return next;
+  };
+
+  const finishStream = (agentId: string, controller: AbortController) => {
+    if (streamAbortRef.current[agentId] === controller) {
+      streamAbortRef.current[agentId] = null;
+    }
+  };
 
   const updateWindow = (agentId: string, patch: Partial<AgentChatWindow>) => {
     setWindows((current) => {
@@ -266,6 +295,15 @@ export function ChatWorkspace({
   useEffect(() => {
     windowsRef.current = windows;
   }, [windows]);
+
+  useEffect(() => {
+    return () => {
+      for (const controller of Object.values(streamAbortRef.current)) {
+        controller?.abort();
+      }
+      streamAbortRef.current = {};
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -377,6 +415,12 @@ export function ChatWorkspace({
     for (const id of Array.from(initializedRef.current)) {
       if (!currentIds.has(id)) {
         initializedRef.current.delete(id);
+      }
+    }
+    for (const [id, controller] of Object.entries(streamAbortRef.current)) {
+      if (!currentIds.has(id)) {
+        controller?.abort();
+        delete streamAbortRef.current[id];
       }
     }
 
@@ -508,9 +552,29 @@ export function ChatWorkspace({
         clearing: false,
         error: null,
       });
+      void loadSessions(agentId, state.selectedSessionId);
     } catch (rawError) {
       updateWindow(agentId, { clearing: false, error: toApiError(rawError) });
     }
+  };
+
+  const refreshSessions = async (agentId: string) => {
+    const state = windows[agentId] ?? createEmptyWindow();
+    await loadSessions(agentId, state.selectedSessionId || undefined);
+  };
+
+  const stopStreaming = (agentId: string) => {
+    const controller = streamAbortRef.current[agentId];
+    if (!controller) {
+      return;
+    }
+    controller.abort();
+    streamAbortRef.current[agentId] = null;
+    updateWindow(agentId, {
+      sending: false,
+      streaming: false,
+      error: null,
+    });
   };
 
   const exportSession = (agent: AgentConfig, state: AgentChatWindow) => {
@@ -671,6 +735,7 @@ export function ChatWorkspace({
     };
 
     if (state.streamingEnabled) {
+      const controller = beginStream(agent.id);
       setWindows((current) => {
         const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
         return {
@@ -678,6 +743,7 @@ export function ChatWorkspace({
           [agent.id]: {
             ...windowState,
             sending: true,
+            streaming: true,
             error: null,
             messages: [
               ...buildRegenerateBaseMessages(
@@ -691,28 +757,32 @@ export function ChatWorkspace({
       });
 
       try {
-        const result = await onRegenerateStream(request, (chunk) => {
-          setWindows((current) => {
-            const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-            const messages = [...windowState.messages];
-            for (let index = messages.length - 1; index >= 0; index -= 1) {
-              if (messages[index].role === "assistant") {
-                messages[index] = {
-                  ...messages[index],
-                  content: `${messages[index].content}${chunk}`,
-                };
-                break;
+        const result = await onRegenerateStream(
+          request,
+          (chunk) => {
+            setWindows((current) => {
+              const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
+              const messages = [...windowState.messages];
+              for (let index = messages.length - 1; index >= 0; index -= 1) {
+                if (messages[index].role === "assistant") {
+                  messages[index] = {
+                    ...messages[index],
+                    content: `${messages[index].content}${chunk}`,
+                  };
+                  break;
+                }
               }
-            }
-            return {
-              ...current,
-              [agent.id]: {
-                ...windowState,
-                messages,
-              },
-            };
-          });
-        });
+              return {
+                ...current,
+                [agent.id]: {
+                  ...windowState,
+                  messages,
+                },
+              };
+            });
+          },
+          controller.signal,
+        );
 
         setWindows((current) => {
           const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
@@ -731,6 +801,7 @@ export function ChatWorkspace({
             [agent.id]: {
               ...windowState,
               sending: false,
+              streaming: false,
               lastModelId: result.modelId,
               selectedSessionId: result.sessionId,
               messages,
@@ -740,13 +811,38 @@ export function ChatWorkspace({
 
         void loadSessions(agent.id, result.sessionId);
       } catch (rawError) {
-        updateWindow(agent.id, { sending: false, error: toApiError(rawError) });
-        void loadMessages(agent.id, state.selectedSessionId);
+        const mapped = toApiError(rawError);
+        if (mapped.code === "STREAM_ABORTED") {
+          setWindows((current) => {
+            const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
+            return {
+              ...current,
+              [agent.id]: {
+                ...windowState,
+                sending: false,
+                streaming: false,
+                error: null,
+              },
+            };
+          });
+          void loadMessages(agent.id, state.selectedSessionId);
+          void loadSessions(agent.id, state.selectedSessionId);
+        } else {
+          updateWindow(agent.id, {
+            sending: false,
+            streaming: false,
+            error: mapped,
+            messages: state.messages,
+          });
+          void loadMessages(agent.id, state.selectedSessionId);
+        }
+      } finally {
+        finishStream(agent.id, controller);
       }
       return;
     }
 
-    updateWindow(agent.id, { sending: true, error: null });
+    updateWindow(agent.id, { sending: true, streaming: false, error: null });
     try {
       const result = await onRegenerate(request);
       setWindows((current) => {
@@ -756,6 +852,7 @@ export function ChatWorkspace({
           [agent.id]: {
             ...windowState,
             sending: false,
+            streaming: false,
             lastModelId: result.modelId,
             selectedSessionId: result.sessionId,
             messages: [
@@ -770,7 +867,7 @@ export function ChatWorkspace({
       });
       void loadSessions(agent.id, result.sessionId);
     } catch (rawError) {
-      updateWindow(agent.id, { sending: false, error: toApiError(rawError) });
+      updateWindow(agent.id, { sending: false, streaming: false, error: toApiError(rawError) });
     }
   };
 
@@ -902,6 +999,7 @@ export function ChatWorkspace({
     };
 
     if (state.streamingEnabled) {
+      const controller = beginStream(agent.id);
       setWindows((current) => {
         const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
         return {
@@ -909,6 +1007,7 @@ export function ChatWorkspace({
           [agent.id]: {
             ...windowState,
             sending: true,
+            streaming: true,
             input: "",
             error: null,
             messages: [
@@ -921,28 +1020,32 @@ export function ChatWorkspace({
       });
 
       try {
-        const result = await onChatStream(request, (chunk) => {
-          setWindows((current) => {
-            const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
-            const messages = [...windowState.messages];
-            for (let index = messages.length - 1; index >= 0; index -= 1) {
-              if (messages[index].role === "assistant") {
-                messages[index] = {
-                  ...messages[index],
-                  content: `${messages[index].content}${chunk}`,
-                };
-                break;
+        const result = await onChatStream(
+          request,
+          (chunk) => {
+            setWindows((current) => {
+              const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
+              const messages = [...windowState.messages];
+              for (let index = messages.length - 1; index >= 0; index -= 1) {
+                if (messages[index].role === "assistant") {
+                  messages[index] = {
+                    ...messages[index],
+                    content: `${messages[index].content}${chunk}`,
+                  };
+                  break;
+                }
               }
-            }
-            return {
-              ...current,
-              [agent.id]: {
-                ...windowState,
-                messages,
-              },
-            };
-          });
-        });
+              return {
+                ...current,
+                [agent.id]: {
+                  ...windowState,
+                  messages,
+                },
+              };
+            });
+          },
+          controller.signal,
+        );
 
         setWindows((current) => {
           const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
@@ -961,6 +1064,7 @@ export function ChatWorkspace({
             [agent.id]: {
               ...windowState,
               sending: false,
+              streaming: false,
               lastModelId: result.modelId,
               selectedSessionId: result.sessionId,
               messages,
@@ -970,12 +1074,39 @@ export function ChatWorkspace({
 
         void loadSessions(agent.id, result.sessionId);
       } catch (rawError) {
-        updateWindow(agent.id, { sending: false, error: toApiError(rawError) });
+        const mapped = toApiError(rawError);
+        if (mapped.code === "STREAM_ABORTED") {
+          setWindows((current) => {
+            const windowState = current[agent.id] ?? createEmptyWindow(preferencesRef.current[agent.id]);
+            return {
+              ...current,
+              [agent.id]: {
+                ...windowState,
+                sending: false,
+                streaming: false,
+                error: null,
+              },
+            };
+          });
+          void loadMessages(agent.id, state.selectedSessionId);
+          void loadSessions(agent.id, state.selectedSessionId);
+        } else {
+          updateWindow(agent.id, {
+            sending: false,
+            streaming: false,
+            error: mapped,
+            input: state.input,
+            messages: state.messages,
+          });
+          void loadMessages(agent.id, state.selectedSessionId);
+        }
+      } finally {
+        finishStream(agent.id, controller);
       }
       return;
     }
 
-    updateWindow(agent.id, { sending: true, error: null });
+    updateWindow(agent.id, { sending: true, streaming: false, error: null });
     try {
       const result = await onChat(request);
 
@@ -986,6 +1117,7 @@ export function ChatWorkspace({
           [agent.id]: {
             ...windowState,
             sending: false,
+            streaming: false,
             input: "",
             lastModelId: result.modelId,
             selectedSessionId: result.sessionId,
@@ -1000,7 +1132,7 @@ export function ChatWorkspace({
 
       void loadSessions(agent.id, result.sessionId);
     } catch (rawError) {
-      updateWindow(agent.id, { sending: false, error: toApiError(rawError) });
+      updateWindow(agent.id, { sending: false, streaming: false, error: toApiError(rawError) });
     }
   };
 
@@ -1017,15 +1149,39 @@ export function ChatWorkspace({
     );
   }
 
+  const visibleAgents = focusedAgentId
+    ? agents.filter((agent) => agent.id === focusedAgentId)
+    : agents;
+
+  if (visibleAgents.length === 0) {
+    return (
+      <section className="panel">
+        <header className="panel-header">
+          <h2>对话聊天</h2>
+        </header>
+        <article className="card">
+          <p className="hint">请选择一个智能体开始对话。</p>
+        </article>
+      </section>
+    );
+  }
+
   return (
     <section className="panel">
-      <header className="panel-header">
-        <h2>对话聊天</h2>
-        <small className="hint">每个智能体独立窗口，支持多会话</small>
+      <header className="panel-header chat-workspace-header">
+        <div>
+          <span className="hero-chip hero-chip-soft">对话工作台</span>
+          <h2>对话聊天</h2>
+        </div>
+        <small className="hint">每个智能体独立窗口，支持多会话、流式回复与快速整理</small>
       </header>
 
-      <div className="chat-window-grid">
-        {agents.map((agent) => {
+      <div
+        className={
+          visibleAgents.length === 1 ? "chat-window-grid chat-window-grid-single" : "chat-window-grid"
+        }
+      >
+        {visibleAgents.map((agent) => {
           const state = windows[agent.id] ?? createEmptyWindow();
           const selectedSession = state.sessions.find((item) => item.id === state.selectedSessionId) ?? null;
           const sessionSearch = state.sessionSearch.trim().toLowerCase();
@@ -1053,18 +1209,64 @@ export function ChatWorkspace({
             <article className="chat-window" key={agent.id}>
               <div className="chat-window-header">
                 <div>
+                  <span className="chat-window-kicker">当前智能体会话</span>
                   <h3>{agent.name}</h3>
                   <small className="hint">
                     模式：{agent.mode} · 最近模型：{state.lastModelId || "未发送"}
                   </small>
                 </div>
+                <div className="chat-window-status">
+                  <span
+                    className={
+                      state.streaming
+                        ? "status-badge is-live"
+                        : state.sending
+                          ? "status-badge is-busy"
+                          : "status-badge"
+                    }
+                  >
+                    {state.streaming
+                      ? "流式生成中"
+                      : state.sending
+                        ? "处理中"
+                        : selectedSession
+                          ? "会话已连接"
+                          : "待开始"}
+                  </span>
+                </div>
               </div>
 
               <div className="chat-body">
                 <aside className="chat-session-panel">
+                  <div className="chat-session-head">
+                    <div>
+                      <strong>会话簿</strong>
+                      <small>{state.sessions.length} 个会话</small>
+                    </div>
+                    {selectedSession && (
+                      <span className="chat-session-badge">
+                        {selectedSession.isArchived ? "已归档" : "活跃"}
+                      </span>
+                    )}
+                  </div>
                   <div className="chat-session-actions">
                     <button className="ghost" onClick={() => void createSession(agent.id)} type="button">
                       新建会话
+                    </button>
+                    <button
+                      className="ghost"
+                      disabled={
+                        state.loadingSessions ||
+                        state.loadingMessages ||
+                        state.sending ||
+                        state.rewriting ||
+                        state.undoing ||
+                        state.clearing
+                      }
+                      onClick={() => void refreshSessions(agent.id)}
+                      type="button"
+                    >
+                      刷新会话
                     </button>
                     <button
                       className="ghost"
@@ -1181,8 +1383,9 @@ export function ChatWorkspace({
                 <div className="chat-main">
                   {selectedSession && (
                     <div className="chat-session-meta hint">
-                      当前会话：{selectedSession.title} · {selectedSession.messageCount} 条消息 ·
-                      {selectedSession.isArchived ? " 已归档" : " 活动"}
+                      <span>{selectedSession.title}</span>
+                      <span>{selectedSession.messageCount} 条消息</span>
+                      <span>{selectedSession.isArchived ? "已归档" : "活动"}</span>
                     </div>
                   )}
 
@@ -1271,194 +1474,206 @@ export function ChatWorkspace({
                     </div>
                   )}
 
-                  <label className="inline-check">
-                    <input
-                      checked={state.streamingEnabled}
-                      onChange={(event) =>
-                        updateWindow(agent.id, { streamingEnabled: event.target.checked })
-                      }
-                      type="checkbox"
-                    />
-                    流式显示回复
-                  </label>
-                  <label className="inline-check">
-                    <input
-                      checked={state.regenerateReplaceLastAssistant}
-                      onChange={(event) =>
-                        updateWindow(agent.id, {
-                          regenerateReplaceLastAssistant: event.target.checked,
-                        })
-                      }
-                      type="checkbox"
-                    />
-                    重生成时替换上一条助手回复
-                  </label>
+                  <div className="chat-compose">
+                    <div className="chat-option-grid">
+                      <label className="inline-check">
+                        <input
+                          checked={state.streamingEnabled}
+                          onChange={(event) =>
+                            updateWindow(agent.id, { streamingEnabled: event.target.checked })
+                          }
+                          type="checkbox"
+                        />
+                        流式显示回复
+                      </label>
+                      <label className="inline-check">
+                        <input
+                          checked={state.regenerateReplaceLastAssistant}
+                          onChange={(event) =>
+                            updateWindow(agent.id, {
+                              regenerateReplaceLastAssistant: event.target.checked,
+                            })
+                          }
+                          type="checkbox"
+                        />
+                        重生成时替换上一条助手回复
+                      </label>
+                    </div>
 
-                  <div className="chat-override-grid">
-                    <label>
-                      Temperature 覆盖
-                      <input
-                        max="2"
-                        min="0"
-                        onChange={(event) => updateWindow(agent.id, { temperature: event.target.value })}
-                        step="0.1"
-                        type="number"
-                        value={state.temperature}
-                      />
-                    </label>
-                    <label>
-                      Max Tokens 覆盖
-                      <input
-                        min="1"
-                        onChange={(event) => updateWindow(agent.id, { maxTokens: event.target.value })}
-                        type="number"
-                        value={state.maxTokens}
-                      />
-                    </label>
-                    <label>
-                      Top P 覆盖
-                      <input
-                        max="1"
-                        min="0"
-                        onChange={(event) => updateWindow(agent.id, { topP: event.target.value })}
-                        step="0.05"
-                        type="number"
-                        value={state.topP}
-                      />
-                    </label>
-                    <label>
-                      Frequency Penalty 覆盖
-                      <input
-                        max="2"
-                        min="-2"
-                        onChange={(event) => updateWindow(agent.id, { frequencyPenalty: event.target.value })}
-                        step="0.1"
-                        type="number"
-                        value={state.frequencyPenalty}
-                      />
-                    </label>
-                  </div>
+                    <div className="chat-override-grid">
+                      <label>
+                        Temperature 覆盖
+                        <input
+                          max="2"
+                          min="0"
+                          onChange={(event) => updateWindow(agent.id, { temperature: event.target.value })}
+                          step="0.1"
+                          type="number"
+                          value={state.temperature}
+                        />
+                      </label>
+                      <label>
+                        Max Tokens 覆盖
+                        <input
+                          min="1"
+                          onChange={(event) => updateWindow(agent.id, { maxTokens: event.target.value })}
+                          type="number"
+                          value={state.maxTokens}
+                        />
+                      </label>
+                      <label>
+                        Top P 覆盖
+                        <input
+                          max="1"
+                          min="0"
+                          onChange={(event) => updateWindow(agent.id, { topP: event.target.value })}
+                          step="0.05"
+                          type="number"
+                          value={state.topP}
+                        />
+                      </label>
+                      <label>
+                        Frequency Penalty 覆盖
+                        <input
+                          max="2"
+                          min="-2"
+                          onChange={(event) => updateWindow(agent.id, { frequencyPenalty: event.target.value })}
+                          step="0.1"
+                          type="number"
+                          value={state.frequencyPenalty}
+                        />
+                      </label>
+                    </div>
 
-                  <label>
-                    输入消息
-                    <textarea
-                      onChange={(event) => updateWindow(agent.id, { input: event.target.value })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          void sendMessage(agent);
+                    <label className="chat-input-field">
+                      输入消息
+                      <textarea
+                        onChange={(event) => updateWindow(agent.id, { input: event.target.value })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            void sendMessage(agent);
+                          }
+                        }}
+                        placeholder="输入你想说的话...（Enter 发送，Shift+Enter 换行）"
+                        rows={4}
+                        value={state.input}
+                      />
+                    </label>
+
+                    <div className="actions chat-actions">
+                      <button
+                        className="primary"
+                        disabled={
+                          disabled ||
+                          state.sending ||
+                          state.rewriting ||
+                          state.undoing ||
+                          state.loadingSessions ||
+                          state.loadingMessages ||
+                          state.clearing ||
+                          !state.selectedSessionId ||
+                          !state.input.trim()
                         }
-                      }}
-                      placeholder="输入你想说的话...（Enter 发送，Shift+Enter 换行）"
-                      rows={4}
-                      value={state.input}
-                    />
-                  </label>
-
-                  <div className="actions">
-                    <button
-                      className="primary"
-                      disabled={
-                        disabled ||
-                        state.sending ||
-                        state.rewriting ||
-                        state.undoing ||
-                        state.loadingSessions ||
-                        state.loadingMessages ||
-                        state.clearing ||
-                        !state.selectedSessionId ||
-                        !state.input.trim()
-                      }
-                      onClick={() => void sendMessage(agent)}
-                      type="button"
-                    >
-                      {state.sending ? "发送中..." : "发送"}
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={
-                        disabled ||
-                        state.sending ||
-                        state.rewriting ||
-                        state.undoing ||
-                        state.loadingSessions ||
-                        state.loadingMessages ||
-                        state.clearing ||
-                        !state.selectedSessionId ||
-                        !state.messages.some((item) => item.role === "user")
-                      }
-                      onClick={() => void regenerateReply(agent)}
-                      type="button"
-                    >
-                      重新生成上条回复
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={
-                        disabled ||
-                        state.sending ||
-                        state.rewriting ||
-                        state.undoing ||
-                        state.loadingSessions ||
-                        state.loadingMessages ||
-                        state.clearing ||
-                        !state.selectedSessionId ||
-                        !state.messages.some((item) => item.role === "user")
-                      }
-                      onClick={() => void rewriteLastUserMessage(agent)}
-                      type="button"
-                    >
-                      {state.rewriting ? "改写中..." : "改写最后提问"}
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={
-                        disabled ||
-                        state.sending ||
-                        state.rewriting ||
-                        state.undoing ||
-                        state.loadingSessions ||
-                        state.loadingMessages ||
-                        state.clearing ||
-                        !state.selectedSessionId ||
-                        state.messages.length === 0
-                      }
-                      onClick={() => void undoLastTurn(agent.id)}
-                      type="button"
-                    >
-                      {state.undoing ? "撤销中..." : "撤销上一轮"}
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={
-                        disabled ||
-                        state.sending ||
-                        state.rewriting ||
-                        state.undoing ||
-                        state.clearing ||
-                        !state.selectedSessionId
-                      }
-                      onClick={() => void clearMessages(agent.id)}
-                      type="button"
-                    >
-                      {state.clearing ? "清空中..." : "清空消息"}
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={state.messages.length === 0 || !state.selectedSessionId}
-                      onClick={() => exportSession(agent, state)}
-                      type="button"
-                    >
-                      导出 Markdown
-                    </button>
-                    <button
-                      className="ghost"
-                      disabled={state.exportingAll || state.sessions.length === 0}
-                      onClick={() => void exportAllSessions(agent, state)}
-                      type="button"
-                    >
-                      {state.exportingAll ? "导出中..." : "导出全部会话"}
-                    </button>
+                        onClick={() => void sendMessage(agent)}
+                        type="button"
+                      >
+                        {state.sending ? (state.streaming ? "生成中..." : "发送中...") : "发送"}
+                      </button>
+                      <button
+                        className="danger"
+                        disabled={!state.streaming}
+                        onClick={() => stopStreaming(agent.id)}
+                        type="button"
+                      >
+                        停止生成
+                      </button>
+                      <button
+                        className="ghost"
+                        disabled={
+                          disabled ||
+                          state.sending ||
+                          state.rewriting ||
+                          state.undoing ||
+                          state.loadingSessions ||
+                          state.loadingMessages ||
+                          state.clearing ||
+                          !state.selectedSessionId ||
+                          !state.messages.some((item) => item.role === "user")
+                        }
+                        onClick={() => void regenerateReply(agent)}
+                        type="button"
+                      >
+                        重新生成上条回复
+                      </button>
+                      <button
+                        className="ghost"
+                        disabled={
+                          disabled ||
+                          state.sending ||
+                          state.rewriting ||
+                          state.undoing ||
+                          state.loadingSessions ||
+                          state.loadingMessages ||
+                          state.clearing ||
+                          !state.selectedSessionId ||
+                          !state.messages.some((item) => item.role === "user")
+                        }
+                        onClick={() => void rewriteLastUserMessage(agent)}
+                        type="button"
+                      >
+                        {state.rewriting ? "改写中..." : "改写最后提问"}
+                      </button>
+                      <button
+                        className="ghost"
+                        disabled={
+                          disabled ||
+                          state.sending ||
+                          state.rewriting ||
+                          state.undoing ||
+                          state.loadingSessions ||
+                          state.loadingMessages ||
+                          state.clearing ||
+                          !state.selectedSessionId ||
+                          state.messages.length === 0
+                        }
+                        onClick={() => void undoLastTurn(agent.id)}
+                        type="button"
+                      >
+                        {state.undoing ? "撤销中..." : "撤销上一轮"}
+                      </button>
+                      <button
+                        className="ghost"
+                        disabled={
+                          disabled ||
+                          state.sending ||
+                          state.rewriting ||
+                          state.undoing ||
+                          state.clearing ||
+                          !state.selectedSessionId
+                        }
+                        onClick={() => void clearMessages(agent.id)}
+                        type="button"
+                      >
+                        {state.clearing ? "清空中..." : "清空消息"}
+                      </button>
+                      <button
+                        className="ghost"
+                        disabled={state.messages.length === 0 || !state.selectedSessionId}
+                        onClick={() => exportSession(agent, state)}
+                        type="button"
+                      >
+                        导出 Markdown
+                      </button>
+                      <button
+                        className="ghost"
+                        disabled={state.exportingAll || state.sessions.length === 0}
+                        onClick={() => void exportAllSessions(agent, state)}
+                        type="button"
+                      >
+                        {state.exportingAll ? "导出中..." : "导出全部会话"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

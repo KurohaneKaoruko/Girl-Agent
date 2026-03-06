@@ -17,6 +17,9 @@
 
 - `GET /health`
 - `GET /api/bootstrap`
+- `GET /api/runtime/status`
+- `POST /api/runtime/provider-probe`
+- `POST /api/runtime/model-probe`
 - `GET /api/providers`
 - `POST /api/providers`
 - `PUT /api/providers/{id}`
@@ -48,6 +51,141 @@
 - `POST /api/chat/stream`（SSE）
 - `POST /api/chat/regenerate`
 - `POST /api/chat/regenerate/stream`（SSE）
+
+## 自动验收脚本
+
+项目内置 `scripts/verify-headless.ps1`，用于验证无头版最小可用链路：
+
+- 健康检查与鉴权
+- Provider / Model / Agent 创建
+- Provider / Model 连通探测
+- `smoke/full` 两档验收
+- `full` 模式默认覆盖 `POST /api/chat/stream`（SSE）回归验证
+- 可选覆盖“流式中途停止（abort）”回归验证
+- 可选输出结构化 JSON 结果（文件或 stdout，含 `status` / `failureCode` / `providerProbe` / `modelProbe` / `streamVerified` / `streamAbortVerified`）
+
+执行示例：
+
+```powershell
+# smoke（默认）：不强制外网可达，可用于本地冒烟
+$env:GIRLAGENT_PROVIDER_KEY="your_provider_key"
+pnpm run verify:headless
+
+# full：强制连通探测通过 + 真实聊天验证
+$env:GIRLAGENT_PROVIDER_KEY="your_provider_key"
+pnpm run verify:headless:full
+# full 模式要求存在真实 Provider Key
+# full 默认包含 /api/chat/stream 回归验证
+# 如需关闭流式验证：
+pnpm run verify:headless:full:no-stream
+# 如需额外验证“流式中途停止”：
+pnpm run verify:headless:full:abort
+# CI 中可通过仓库 Secret `GIRLAGENT_PROVIDER_KEY` 自动启用 full/full:abort
+# GitHub Actions workflow_dispatch 输入：
+# - run_full: 手动启用 full
+# - run_abort: 手动启用 full:abort
+# headless-verify 任务会上传 verify JSON artifact
+
+# 若你已手动启动服务：
+pnpm run verify:headless:running
+
+# CI 常用（输出压缩 JSON 到 stdout）
+pnpm run verify:headless:ci
+# 聚合当前 target 下的验收结果
+pnpm run verify:headless:summary
+
+# 需要自定义参数/输出 JSON 时，直接执行脚本
+.\scripts\verify-headless.ps1 -Mode smoke -OutputJson .\target\verify-headless.json
+.\scripts\verify-headless.ps1 -Mode smoke -PrintResultJson
+# .\scripts\verify-headless.ps1 -Mode full -VerifyStream:$false
+# .\scripts\verify-headless.ps1 -Mode full -VerifyStreamAbort
+```
+
+## `/api/bootstrap`（更新）
+
+响应体新增 `apiVersion` 字段，便于前后端做协议版本对齐。
+
+示例：
+
+```json
+{
+  "appVersion": "0.1.0",
+  "apiVersion": "1.0.0",
+  "chatGatewayKind": "openai_compat"
+}
+```
+
+## `/api/runtime/status`（新增）
+
+- 用于读取运行时总览统计（Provider/Model/Agent/Session/Message 数量）。
+
+响应示例：
+
+```json
+{
+  "providerCount": 2,
+  "modelCount": 6,
+  "agentCount": 3,
+  "sessionCount": 9,
+  "messageCount": 128,
+  "chatGatewayKind": "openai_compat"
+}
+```
+
+## `/api/runtime/provider-probe`（新增）
+
+- 用于检测指定 Provider 配置是否可达。
+- 请求体：
+
+```json
+{
+  "providerId": "provider-id"
+}
+```
+
+- 响应体：
+
+```json
+{
+  "providerId": "provider-id",
+  "reachable": true,
+  "latencyMs": 182,
+  "detail": "reachable"
+}
+```
+
+说明：
+
+- 当网络异常、鉴权失败或服务不可用时，接口仍返回 `200`，但 `reachable=false`。
+- 当 `providerId` 不存在或配置非法（例如缺少 `apiBase`）时，返回业务错误（如 `NOT_FOUND` / `VALIDATION_ERROR`）。
+
+## `/api/runtime/model-probe`（新增）
+
+- 用于检测指定模型（含 providerRef/customProvider）是否可调用。
+- 请求体：
+
+```json
+{
+  "modelRefId": "model-id"
+}
+```
+
+- 响应体：
+
+```json
+{
+  "modelRefId": "model-id",
+  "modelId": "gpt-4.1-mini",
+  "reachable": true,
+  "latencyMs": 421,
+  "detail": "reachable"
+}
+```
+
+说明：
+
+- 探测通过一次最小聊天请求执行连通性验证。
+- 调用失败时同样返回 `200` 且 `reachable=false`，`detail` 包含失败原因摘要。
 
 ## 错误格式
 

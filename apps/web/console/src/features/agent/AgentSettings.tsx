@@ -517,6 +517,7 @@ export function AgentSettings({
   onDelete,
 }: Props) {
   const [createForm, setCreateForm] = useState<CreateAgentRequest>(emptyAgentRequest);
+  const [showCreate, setShowCreate] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, UpdateAgentRequest>>({});
 
   const replyModels = useMemo(
@@ -591,32 +592,42 @@ export function AgentSettings({
     <section className="panel">
       <header className="panel-header">
         <h2>智能体设置</h2>
-      </header>
-
-      <article className="card">
-        <AgentForm
-          asrModels={asrModels}
-          decisionModels={toolModels}
-          onChange={(value) => setCreateForm(value as CreateAgentRequest)}
-          replyModels={replyModels}
-          toolModels={toolModels}
-          ttsModels={ttsModels}
-          title="新增智能体"
-          value={createForm}
-          visionModels={visionModels}
-        />
         <button
           className="primary"
-          disabled={saving}
-          onClick={async () => {
-            await onCreate(createForm);
-            setCreateForm(emptyAgentRequest());
-          }}
+          onClick={() => setShowCreate((current) => !current)}
           type="button"
         >
-          新建智能体
+          {showCreate ? "收起新增" : "新增"}
         </button>
-      </article>
+      </header>
+
+      {showCreate && (
+        <article className="card">
+          <AgentForm
+            asrModels={asrModels}
+            decisionModels={toolModels}
+            onChange={(value) => setCreateForm(value as CreateAgentRequest)}
+            replyModels={replyModels}
+            toolModels={toolModels}
+            ttsModels={ttsModels}
+            title="新增智能体"
+            value={createForm}
+            visionModels={visionModels}
+          />
+          <button
+            className="primary"
+            disabled={saving}
+            onClick={async () => {
+              await onCreate(createForm);
+              setCreateForm(emptyAgentRequest());
+              setShowCreate(false);
+            }}
+            type="button"
+          >
+            新建智能体
+          </button>
+        </article>
+      )}
 
       <div className="stack">
         {agents.map((agent) => {
