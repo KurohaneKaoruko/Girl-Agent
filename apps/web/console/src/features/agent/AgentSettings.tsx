@@ -608,10 +608,16 @@ export function AgentSettings({
 
   return (
     <section className="panel">
-      <header className="panel-header">
-        <div>
+      <header className="panel-header workspace-section-hero">
+        <div className="workspace-section-copy">
+          <span className="hero-chip hero-chip-soft">Agent Studio</span>
           <h2>智能体</h2>
-          <small className="hint">管理角色设定、槽位模型和参数覆盖。</small>
+          <p className="workspace-section-lead">管理角色设定、槽位模型和参数覆盖，让不同职责的智能体能直接投入工作台。</p>
+          <div className="workspace-section-pills">
+            <span className="workspace-section-pill">智能体 {agents.length}</span>
+            <span className="workspace-section-pill">常驻模式 {agents.filter((agent) => agent.mode === "ambient").length}</span>
+            <span className="workspace-section-pill">可用回复模型 {replyModels.length}</span>
+          </div>
         </div>
         <div className="section-actions">
           <button
@@ -702,8 +708,19 @@ export function AgentSettings({
 
       <div className="settings-summary-list">
         {agents.length === 0 && (
-          <article className="card settings-summary-empty">
-            <p className="hint">还没有智能体，先新增一个。</p>
+          <article className="card settings-summary-empty resource-empty-state">
+            <span className="resource-empty-kicker">Agent</span>
+            <h3>还没有智能体</h3>
+            <p>
+              {replyModels.length === 0
+                ? "当前还没有可作为回复模型的配置。先补模型，再创建你的第一个智能体会更完整。"
+                : "为不同人格、工具链和场景创建专属智能体，让聊天工作台真正开始发挥价值。"}
+            </p>
+            <div className="actions">
+              <button className="primary" onClick={() => setShowCreate(true)} type="button">
+                新增第一个智能体
+              </button>
+            </div>
           </article>
         )}
         {agents.map((agent) => {

@@ -251,6 +251,13 @@ export function App() {
   );
 
   const featuredAgent = useMemo(() => agents[0] ?? null, [agents]);
+  const enabledProviderCount = useMemo(() => providers.filter((provider) => provider.enabled).length, [providers]);
+  const enabledModelCount = useMemo(() => models.filter((model) => model.enabled).length, [models]);
+  const ambientAgentCount = useMemo(
+    () => agents.filter((agent) => agent.mode === "ambient").length,
+    [agents],
+  );
+  const totalResourceCount = providers.length + models.length + agents.length;
   const handleSectionSelect = useCallback((section: MainSection) => {
     setActiveSection(section);
     if (isMobileViewport()) {
@@ -367,6 +374,18 @@ export function App() {
                   <small>当前连接</small>
                   <strong>{backendStatus}</strong>
                   <span>{headlessBaseUrl || "桌面端内置入口"}</span>
+                </div>
+                <div className="overview-mini-grid">
+                  <article className="overview-mini-card">
+                    <small>资源总数</small>
+                    <strong>{totalResourceCount}</strong>
+                    <span>提供商、模型、智能体合计</span>
+                  </article>
+                  <article className="overview-mini-card">
+                    <small>启用模型</small>
+                    <strong>{enabledModelCount}</strong>
+                    <span>当前可直接参与工作流</span>
+                  </article>
                 </div>
               </div>
             </article>
@@ -535,32 +554,69 @@ export function App() {
 
         {activeSection === "settings" && (
           <section className="panel">
-            <header className="panel-header">
-              <div>
+            <header className="panel-header workspace-section-hero">
+              <div className="workspace-section-copy">
+                <span className="hero-chip hero-chip-soft">Workspace Settings</span>
                 <h2>设置</h2>
-                <small className="hint">管理当前控制台连接、刷新和登录状态。</small>
+                <p className="workspace-section-lead">管理当前控制台连接、刷新、登录状态以及工作台资源概览。</p>
+                <div className="workspace-section-pills">
+                  <span className="workspace-section-pill">后端：{backendStatus}</span>
+                  <span className="workspace-section-pill">Base URL：{headlessBaseUrl || "桌面端内置入口"}</span>
+                  <span className="workspace-section-pill">会话：{runtimeStatus?.sessionCount ?? 0}</span>
+                  <span className="workspace-section-pill">Ambient 智能体：{ambientAgentCount}</span>
+                </div>
               </div>
             </header>
-            <article className="card settings-card">
-              <div className="settings-grid">
-                <div className="settings-copy">
-                  <h3>连接与登录</h3>
-                  <small className="hint">当前 Base URL：{headlessBaseUrl || "桌面端内置入口"}</small>
-                  <small className="hint">当前环境：{isTauri ? "Tauri Desktop" : "Web Console"}</small>
-                  <small className="hint">后端状态：{backendStatus}</small>
-                </div>
-                <div className="actions settings-actions">
-                  <button className="ghost" disabled={saving} onClick={() => void withAction(loadAll)} type="button">
-                    刷新全部数据
-                  </button>
-                  {!isTauri && (
-                    <button className="danger" onClick={handleLogout} type="button">
-                      退出登录
+            <div className="settings-panel-grid">
+              <article className="card settings-card">
+                <div className="settings-grid">
+                  <div className="settings-copy">
+                    <h3>连接与登录</h3>
+                    <small className="hint">当前 Base URL：{headlessBaseUrl || "桌面端内置入口"}</small>
+                    <small className="hint">当前环境：{isTauri ? "Tauri Desktop" : "Web Console"}</small>
+                    <small className="hint">后端状态：{backendStatus}</small>
+                  </div>
+                  <div className="actions settings-actions">
+                    <button className="ghost" disabled={saving} onClick={() => void withAction(loadAll)} type="button">
+                      刷新全部数据
                     </button>
-                  )}
+                    {!isTauri && (
+                      <button className="danger" onClick={handleLogout} type="button">
+                        退出登录
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </article>
+              </article>
+              <article className="card settings-card settings-card-secondary">
+                <div className="settings-copy">
+                  <h3>工作台概览</h3>
+                  <small className="hint">把当前连接下的关键资源、活跃能力和运行状态集中在一处查看。</small>
+                </div>
+                <div className="settings-fact-grid">
+                  <article className="settings-fact-card">
+                    <span>提供商</span>
+                    <strong>{providers.length}</strong>
+                    <small>已启用 {enabledProviderCount}</small>
+                  </article>
+                  <article className="settings-fact-card">
+                    <span>模型</span>
+                    <strong>{models.length}</strong>
+                    <small>已启用 {enabledModelCount}</small>
+                  </article>
+                  <article className="settings-fact-card">
+                    <span>智能体</span>
+                    <strong>{agents.length}</strong>
+                    <small>常驻 {ambientAgentCount}</small>
+                  </article>
+                  <article className="settings-fact-card">
+                    <span>会话</span>
+                    <strong>{runtimeStatus?.sessionCount ?? 0}</strong>
+                    <small>消息 {runtimeStatus?.messageCount ?? 0}</small>
+                  </article>
+                </div>
+              </article>
+            </div>
           </section>
         )}
 

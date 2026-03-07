@@ -562,10 +562,16 @@ export function ModelSettings({
 
   return (
     <section className="panel">
-      <header className="panel-header">
-        <div>
+      <header className="panel-header workspace-section-hero">
+        <div className="workspace-section-copy">
+          <span className="hero-chip hero-chip-soft">Model Matrix</span>
           <h2>模型</h2>
-          <small className="hint">管理模型编排、能力声明和连通性校验。</small>
+          <p className="workspace-section-lead">管理模型编排、能力声明和连通性校验，把不同类别模型接进统一工作流。</p>
+          <div className="workspace-section-pills">
+            <span className="workspace-section-pill">模型 {models.length}</span>
+            <span className="workspace-section-pill">已启用 {models.filter((model) => model.enabled).length}</span>
+            <span className="workspace-section-pill">提供商来源 {providers.length}</span>
+          </div>
         </div>
         <div className="section-actions">
           <button
@@ -646,8 +652,19 @@ export function ModelSettings({
 
       <div className="settings-summary-list">
         {models.length === 0 && (
-          <article className="card settings-summary-empty">
-            <p className="hint">还没有模型，先新增一个。</p>
+          <article className="card settings-summary-empty resource-empty-state">
+            <span className="resource-empty-kicker">Model</span>
+            <h3>还没有模型配置</h3>
+            <p>
+              {providers.length === 0
+                ? "当前还没有提供商来源。虽然可以使用自定义 Provider，但先补一份提供商配置会更顺手。"
+                : "把第一个模型接入后，智能体页和聊天工作台才会进入完整状态。"}
+            </p>
+            <div className="actions">
+              <button className="primary" onClick={() => setShowCreate(true)} type="button">
+                新增第一个模型
+              </button>
+            </div>
           </article>
         )}
         {models.map((model) => {

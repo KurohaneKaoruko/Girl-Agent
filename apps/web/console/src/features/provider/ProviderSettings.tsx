@@ -103,10 +103,16 @@ export function ProviderSettings({
 
   return (
     <section className="panel">
-      <header className="panel-header">
-        <div>
+      <header className="panel-header workspace-section-hero">
+        <div className="workspace-section-copy">
+          <span className="hero-chip hero-chip-soft">Provider Hub</span>
           <h2>提供商</h2>
-          <small className="hint">管理模型来源、Key 池和连通性校验。</small>
+          <p className="workspace-section-lead">管理模型来源、Key 池和连通性校验，确保后续模型和智能体都有稳定入口。</p>
+          <div className="workspace-section-pills">
+            <span className="workspace-section-pill">已配置 {providers.length}</span>
+            <span className="workspace-section-pill">已启用 {providers.filter((provider) => provider.enabled).length}</span>
+            <span className="workspace-section-pill">内置预设 {presets.length}</span>
+          </div>
         </div>
         <div className="section-actions">
           <button
@@ -342,8 +348,15 @@ export function ProviderSettings({
 
       <div className="settings-summary-list">
         {providers.length === 0 && (
-          <article className="card settings-summary-empty">
-            <p className="hint">还没有提供商配置，先新增一个。</p>
+          <article className="card settings-summary-empty resource-empty-state">
+            <span className="resource-empty-kicker">Provider</span>
+            <h3>还没有提供商配置</h3>
+            <p>先接入一个模型来源。后面的模型编排、连通测试和智能体配置都会围绕这里展开。</p>
+            <div className="actions">
+              <button className="primary" onClick={() => setShowCreate(true)} type="button">
+                新增第一个提供商
+              </button>
+            </div>
           </article>
         )}
         {providers.map((provider) => {
