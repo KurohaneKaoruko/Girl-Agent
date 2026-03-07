@@ -644,14 +644,17 @@ class HeadlessClient implements ApiClient {
   }
 
   updateProvider(id: string, input: UpdateProviderRequest) {
-    return this.request<ProviderConfig>(`/api/providers/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(input),
+    return this.request<ProviderConfig>("/api/providers/update", {
+      method: "POST",
+      body: JSON.stringify({ id, input }),
     });
   }
 
   deleteProvider(id: string) {
-    return this.request<void>(`/api/providers/${id}`, { method: "DELETE" });
+    return this.request<void>("/api/providers/delete", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
   }
 
   probeProviderConnection(input: ProbeProviderConnectionRequest) {
@@ -673,14 +676,17 @@ class HeadlessClient implements ApiClient {
   }
 
   updateModel(id: string, input: UpdateModelRequest) {
-    return this.request<ModelConfig>(`/api/models/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(input),
+    return this.request<ModelConfig>("/api/models/update", {
+      method: "POST",
+      body: JSON.stringify({ id, input }),
     });
   }
 
   deleteModel(id: string) {
-    return this.request<void>(`/api/models/${id}`, { method: "DELETE" });
+    return this.request<void>("/api/models/delete", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
   }
 
   probeModelConnection(input: ProbeModelConnectionRequest) {
@@ -702,14 +708,17 @@ class HeadlessClient implements ApiClient {
   }
 
   updateAgent(id: string, input: UpdateAgentRequest) {
-    return this.request<AgentConfig>(`/api/agents/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(input),
+    return this.request<AgentConfig>("/api/agents/update", {
+      method: "POST",
+      body: JSON.stringify({ id, input }),
     });
   }
 
   deleteAgent(id: string) {
-    return this.request<void>(`/api/agents/${id}`, { method: "DELETE" });
+    return this.request<void>("/api/agents/delete", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
   }
 
   listWorkspaceChatSessions() {
@@ -724,23 +733,30 @@ class HeadlessClient implements ApiClient {
   }
 
   updateWorkspaceChatSession(sessionId: string, input: UpdateWorkspaceChatSessionRequest) {
-    return this.request<WorkspaceChatSession>(`/api/workspace/sessions/${sessionId}`, {
-      method: "PUT",
-      body: JSON.stringify(input),
+    return this.request<WorkspaceChatSession>("/api/workspace/session/update", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, input }),
     });
   }
 
   deleteWorkspaceChatSession(sessionId: string) {
-    return this.request<void>(`/api/workspace/sessions/${sessionId}`, { method: "DELETE" });
+    return this.request<void>("/api/workspace/session/delete", {
+      method: "POST",
+      body: JSON.stringify({ sessionId }),
+    });
   }
 
   listWorkspaceChatMessages(sessionId: string) {
-    return this.request<WorkspaceChatMessage[]>(`/api/workspace/sessions/${sessionId}/messages`);
+    return this.request<WorkspaceChatMessage[]>("/api/workspace/messages/list", {
+      method: "POST",
+      body: JSON.stringify({ sessionId }),
+    });
   }
 
   clearWorkspaceChatMessages(sessionId: string) {
-    return this.request<void>(`/api/workspace/sessions/${sessionId}/messages`, {
-      method: "DELETE",
+    return this.request<void>("/api/workspace/messages/clear", {
+      method: "POST",
+      body: JSON.stringify({ sessionId }),
     });
   }
 

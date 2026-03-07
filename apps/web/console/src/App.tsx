@@ -406,7 +406,7 @@ export function App() {
           <ChatWorkspace
             agents={agents}
             disabled={saving}
-            onListSessions={() => api.listWorkspaceChatSessions()}
+            onListSessions={() => callChat(() => api.listWorkspaceChatSessions())}
             onCreateSession={(input: CreateWorkspaceChatSessionRequest) =>
               callChat(() => api.createWorkspaceChatSession(input))
             }
@@ -418,7 +418,7 @@ export function App() {
                 await api.deleteWorkspaceChatSession(sessionId);
               })
             }
-            onListMessages={(sessionId: string) => api.listWorkspaceChatMessages(sessionId)}
+            onListMessages={(sessionId: string) => callChat(() => api.listWorkspaceChatMessages(sessionId))}
             onClearMessages={(sessionId: string) =>
               callChat(async () => {
                 await api.clearWorkspaceChatMessages(sessionId);

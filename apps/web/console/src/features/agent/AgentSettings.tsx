@@ -240,7 +240,7 @@ function AgentForm({
           智能体名称
           <input
             onChange={(event) => onChange({ ...value, name: event.target.value })}
-            placeholder="例如：少女助手"
+            placeholder="例如：智能体 1"
             value={value.name}
           />
         </label>
@@ -274,7 +274,7 @@ function AgentForm({
         人格设定
         <textarea
           onChange={(event) => onChange({ ...value, persona: event.target.value })}
-          placeholder="例如：温柔、理性、善于总结。"
+          placeholder="可留空；例如：擅长总结、偏专业表达。"
           rows={4}
           value={value.persona}
         />
@@ -284,7 +284,7 @@ function AgentForm({
         说话规则
         <textarea
           onChange={(event) => onChange({ ...value, speechRules: event.target.value })}
-          placeholder="例如：先结论后细节，简洁中文。"
+          placeholder="可留空；例如：先结论后细节，默认使用简洁中文。"
           rows={4}
           value={value.speechRules}
         />

@@ -34,6 +34,46 @@ struct AppState {
 
 type ApiResponse<T> = Result<Json<T>, (StatusCode, Json<ErrorPayload>)>;
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceSessionIdPayload {
+    session_id: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateWorkspaceSessionPayload {
+    session_id: String,
+    input: UpdateWorkspaceChatSessionRequest,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResourceIdPayload {
+    id: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateProviderPayload {
+    id: String,
+    input: UpdateProviderRequest,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateModelPayload {
+    id: String,
+    input: UpdateModelRequest,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateAgentPayload {
+    id: String,
+    input: UpdateAgentRequest,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_url =
@@ -71,10 +111,16 @@ fn build_router(state: AppState) -> Router {
             "/api/providers/{id}",
             put(update_provider).delete(delete_provider),
         )
+        .route("/api/providers/update", post(update_provider_by_body))
+        .route("/api/providers/delete", post(delete_provider_by_body))
         .route("/api/models", get(list_models).post(create_model))
         .route("/api/models/{id}", put(update_model).delete(delete_model))
+        .route("/api/models/update", post(update_model_by_body))
+        .route("/api/models/delete", post(delete_model_by_body))
         .route("/api/agents", get(list_agents).post(create_agent))
         .route("/api/agents/{id}", put(update_agent).delete(delete_agent))
+        .route("/api/agents/update", post(update_agent_by_body))
+        .route("/api/agents/delete", post(delete_agent_by_body))
         .route(
             "/api/workspace/sessions",
             get(list_workspace_chat_sessions).post(create_workspace_chat_session),
@@ -84,11 +130,35 @@ fn build_router(state: AppState) -> Router {
             put(update_workspace_chat_session).delete(delete_workspace_chat_session),
         )
         .route(
+            "/api/workspace/session/{session_id}",
+            put(update_workspace_chat_session).delete(delete_workspace_chat_session),
+        )
+        .route(
             "/api/workspace/sessions/{session_id}/messages",
+            get(list_workspace_chat_messages).delete(clear_workspace_chat_messages),
+        )
+        .route(
+            "/api/workspace/messages/{session_id}",
             get(list_workspace_chat_messages).delete(clear_workspace_chat_messages),
         )
         .route("/api/workspace/chat", post(chat_with_session))
         .route("/api/workspace/chat/stream", post(chat_with_session_stream))
+        .route(
+            "/api/workspace/messages/list",
+            post(list_workspace_chat_messages_by_body),
+        )
+        .route(
+            "/api/workspace/messages/clear",
+            post(clear_workspace_chat_messages_by_body),
+        )
+        .route(
+            "/api/workspace/session/update",
+            post(update_workspace_chat_session_by_body),
+        )
+        .route(
+            "/api/workspace/session/delete",
+            post(delete_workspace_chat_session_by_body),
+        )
         .route(
             "/api/agents/{id}/chat/sessions",
             get(list_agent_chat_sessions).post(create_agent_chat_session),
@@ -225,6 +295,18 @@ async fn update_provider(
         .map_err(map_error)
 }
 
+async fn update_provider_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateProviderPayload>,
+) -> ApiResponse<girlagent_core::ProviderConfig> {
+    state
+        .service
+        .update_provider(&payload.id, payload.input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
 async fn delete_provider(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -232,6 +314,18 @@ async fn delete_provider(
     state
         .service
         .delete_provider(&id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn delete_provider_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<ResourceIdPayload>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .delete_provider(&payload.id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(map_error)
@@ -285,6 +379,18 @@ async fn update_model(
         .map_err(map_error)
 }
 
+async fn update_model_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateModelPayload>,
+) -> ApiResponse<girlagent_core::ModelConfig> {
+    state
+        .service
+        .update_model(&payload.id, payload.input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
 async fn delete_model(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -292,6 +398,18 @@ async fn delete_model(
     state
         .service
         .delete_model(&id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn delete_model_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<ResourceIdPayload>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .delete_model(&payload.id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(map_error)
@@ -345,6 +463,18 @@ async fn update_agent(
         .map_err(map_error)
 }
 
+async fn update_agent_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateAgentPayload>,
+) -> ApiResponse<girlagent_core::AgentConfig> {
+    state
+        .service
+        .update_agent(&payload.id, payload.input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
 async fn delete_agent(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -352,6 +482,18 @@ async fn delete_agent(
     state
         .service
         .delete_agent(&id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn delete_agent_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<ResourceIdPayload>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .delete_agent(&payload.id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(map_error)
@@ -417,6 +559,18 @@ async fn update_workspace_chat_session(
         .map_err(map_error)
 }
 
+async fn update_workspace_chat_session_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateWorkspaceSessionPayload>,
+) -> ApiResponse<girlagent_core::WorkspaceChatSession> {
+    state
+        .service
+        .update_workspace_chat_session(&payload.session_id, payload.input)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
 async fn delete_workspace_chat_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -424,6 +578,18 @@ async fn delete_workspace_chat_session(
     state
         .service
         .delete_workspace_chat_session(&session_id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn delete_workspace_chat_session_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<WorkspaceSessionIdPayload>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .delete_workspace_chat_session(&payload.session_id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(map_error)
@@ -448,6 +614,30 @@ async fn clear_workspace_chat_messages(
     state
         .service
         .clear_workspace_chat_messages(&session_id)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(map_error)
+}
+
+async fn list_workspace_chat_messages_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<WorkspaceSessionIdPayload>,
+) -> ApiResponse<Vec<girlagent_core::WorkspaceChatMessage>> {
+    state
+        .service
+        .list_workspace_chat_messages(&payload.session_id)
+        .await
+        .map(Json)
+        .map_err(map_error)
+}
+
+async fn clear_workspace_chat_messages_by_body(
+    State(state): State<AppState>,
+    Json(payload): Json<WorkspaceSessionIdPayload>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorPayload>)> {
+    state
+        .service
+        .clear_workspace_chat_messages(&payload.session_id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(map_error)

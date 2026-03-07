@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import type {
   AgentConfig,
   ApiError,
@@ -82,6 +82,14 @@ const formatDateTime = (raw: string): string => {
   });
 };
 
+const buildAvatarLabel = (name: string): string => {
+  const clean = name.trim();
+  if (!clean) {
+    return "?";
+  }
+  return clean.slice(0, 2).toUpperCase();
+};
+
 const createSessionDraft = (
   agents: AgentConfig[],
   session?: WorkspaceChatSession | null,
@@ -144,13 +152,30 @@ export function ChatWorkspace({
   const [notice, setNotice] = useState("");
   const activeStreamRef = useRef<AbortController | null>(null);
   const dragAgentIdRef = useRef<string | null>(null);
+  const chatLogRef = useRef<HTMLDivElement | null>(null);
   const errorDisplay = error ? describeApiError(error) : null;
+  const clearFeedback = (resetNotice = true) => {
+    setError(null);
+    if (resetNotice) {
+      setNotice("");
+    }
+  };
 
   const agentNameById = useMemo(
     () => Object.fromEntries(agents.map((agent) => [agent.id, agent.name])),
     [agents],
   );
   const selectedSession = sessions.find((item) => item.id === selectedSessionId) ?? null;
+  const selectedParticipantNames = useMemo(
+    () =>
+      selectedSession?.participants.map((item) => agentNameById[item.agentId] ?? item.agentId) ?? [],
+    [agentNameById, selectedSession],
+  );
+  const selectedSessionAvatar = selectedSession
+    ? selectedSession.isGroup
+      ? "群"
+      : buildAvatarLabel(selectedParticipantNames[0] ?? selectedSession.title)
+    : "";
 
   const loadSessions = async (preferredSessionId?: string) => {
     setLoadingSessions(true);
@@ -176,6 +201,7 @@ export function ChatWorkspace({
   const loadMessages = async (sessionId: string) => {
     if (!sessionId) {
       setMessages([]);
+      clearFeedback();
       return;
     }
     setLoadingMessages(true);
@@ -203,8 +229,17 @@ export function ChatWorkspace({
       setMessages([]);
       return;
     }
+    clearFeedback();
     void loadMessages(selectedSessionId);
   }, [selectedSessionId]);
+
+  useEffect(() => {
+    const element = chatLogRef.current;
+    if (!element) {
+      return;
+    }
+    element.scrollTop = element.scrollHeight;
+  }, [messages, loadingMessages, streaming]);
 
   const updateDraftParticipant = (
     setter: Dispatch<SetStateAction<SessionDraft>>,
@@ -254,6 +289,7 @@ export function ChatWorkspace({
       return;
     }
     try {
+      clearFeedback();
       const created = await onCreateSession({ title, participants });
       setShowCreateModal(false);
       setCreateDraft(createSessionDraft(agents));
@@ -279,6 +315,7 @@ export function ChatWorkspace({
       return;
     }
     try {
+      clearFeedback();
       await onUpdateSession(selectedSession.id, {
         title,
         participants,
@@ -291,8 +328,10 @@ export function ChatWorkspace({
       });
       setShowSettingsModal(false);
       await loadSessions(selectedSession.id);
+      setNotice("会话设置已保存。");
       setError(null);
     } catch (rawError) {
+      setNotice("");
       setError(toApiError(rawError));
     }
   };
@@ -307,6 +346,7 @@ export function ChatWorkspace({
     activeStreamRef.current = controller;
     setSending(true);
     setStreaming(true);
+    clearFeedback();
     try {
       const tempUserMessage: WorkspaceChatMessage = {
         role: "user",
@@ -368,8 +408,10 @@ export function ChatWorkspace({
       const mapped = toApiError(rawError);
       if (mapped.code === "STREAM_ABORTED") {
         setNotice("已停止生成。");
+        setError(null);
         await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
       } else {
+        setNotice("");
         setError(mapped);
         await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
       }
@@ -387,9 +429,13 @@ export function ChatWorkspace({
       return;
     }
     try {
+      clearFeedback();
       await onClearMessages(selectedSessionId);
       await Promise.all([loadMessages(selectedSessionId), loadSessions(selectedSessionId)]);
+      setNotice("当前会话消息已清空。");
+      setError(null);
     } catch (rawError) {
+      setNotice("");
       setError(toApiError(rawError));
     }
   };
@@ -398,15 +444,29 @@ export function ChatWorkspace({
     activeStreamRef.current?.abort();
   };
 
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    if (!disabled && !sending && composer.trim()) {
+      void sendMessage();
+    }
+  };
+
   const deleteSession = async () => {
     if (!selectedSession || !window.confirm(`确认删除会话“${selectedSession.title}”？`)) {
       return;
     }
     try {
+      clearFeedback();
       await onDeleteSession(selectedSession.id);
       setShowSettingsModal(false);
       await loadSessions();
+      setNotice("会话已删除。");
+      setError(null);
     } catch (rawError) {
+      setNotice("");
       setError(toApiError(rawError));
     }
   };
@@ -506,12 +566,6 @@ export function ChatWorkspace({
   if (agents.length === 0) {
     return (
       <section className="panel">
-        <header className="panel-header">
-          <div>
-            <h2>聊天工作台</h2>
-            <small className="hint">先创建至少一个智能体，才能开始单聊或群组会话。</small>
-          </div>
-        </header>
         <article className="card">
           <p className="hint">请先在“智能体设置”中创建至少一个智能体。</p>
           <div className="actions">
@@ -525,84 +579,41 @@ export function ChatWorkspace({
   }
 
   return (
-    <section className="panel">
-      <header className="panel-header">
-        <div>
-          <h2>聊天工作台</h2>
-          <small className="hint">会话列表优先，支持单聊与群组会话，以及按参与者设置接收/回复规则。</small>
-        </div>
-        <div className="actions">
-          <button className="ghost" onClick={() => void loadSessions(selectedSessionId)} type="button">
-            刷新会话
-          </button>
-          <button
-            className="primary"
-            onClick={() => {
-              setCreateDraft(createSessionDraft(agents));
-              setShowCreateModal(true);
-            }}
-            type="button"
-          >
-            新建会话
-          </button>
-        </div>
-      </header>
-
+    <section className="panel chat-workspace-panel">
       <div className="chat-session-workbench">
-        <aside className="chat-session-sidebar">
-          <div className="chat-session-sidebar-head">
-            <strong>会话列表</strong>
-            <small>{sessions.length} 个会话</small>
-          </div>
-          <div className="chat-session-list">
-            {loadingSessions && <p className="hint">加载会话中...</p>}
-            {!loadingSessions && sessions.length === 0 && (
-              <p className="hint">还没有会话，先创建一个单聊或群组会话。</p>
-            )}
-            {sessions.map((session) => (
-              <button
-                className={session.id === selectedSessionId ? "chat-session-item active" : "chat-session-item"}
-                key={session.id}
-                onClick={() => setSelectedSessionId(session.id)}
-                type="button"
-              >
-                <strong>{session.title}</strong>
-                <small>
-                  {session.participants.map((item) => agentNameById[item.agentId] ?? item.agentId).join(" / ")}
-                </small>
-                <small>
-                  {session.messageCount} 条 · {formatDateTime(session.updatedAt)}
-                </small>
-                <span>{session.lastMessagePreview ?? "暂无消息"}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-
         <div className="chat-session-main">
           {selectedSession ? (
-            <>
+            <div className="chat-thread-shell">
               <div className="chat-session-main-head">
-                <div>
-                  <div className="chat-session-main-title-row">
-                    <h3>{selectedSession.title}</h3>
-                    <span className="status-badge">{selectedSession.isGroup ? "群组会话" : "单聊会话"}</span>
-                  </div>
-                  <div className="chat-session-participants">
-                    {selectedSession.participants.map((participant) => (
-                      <span className="chat-session-participant-pill" key={participant.agentId}>
-                        {agentNameById[participant.agentId] ?? participant.agentId}
-                        <small>
-                          接收 {participant.receiveMode === "all" ? "全消息" : "仅 @"} · 回复{" "}
-                          {participant.replyMode === "all" ? "全消息" : "仅 @"}
-                        </small>
-                      </span>
-                    ))}
+                <div className="chat-thread-profile">
+                  <div className="chat-thread-avatar">{selectedSessionAvatar}</div>
+                  <div className="chat-thread-meta">
+                    <div className="chat-session-main-title-row">
+                      <h3>{selectedSession.title}</h3>
+                      <span className="status-badge">{selectedSession.isGroup ? "群聊会话" : "单聊会话"}</span>
+                    </div>
+                    <div className="chat-thread-summary">
+                      <span>{selectedSession.messageCount} 条</span>
+                      <span>{formatDateTime(selectedSession.updatedAt)}</span>
+                      {selectedSession.isPinned && <span>已置顶</span>}
+                      {selectedSession.isArchived && <span>已归档</span>}
+                    </div>
+                    <div className="chat-session-participants">
+                      {selectedSession.participants.map((participant) => (
+                        <span className="chat-session-participant-pill" key={participant.agentId}>
+                          <strong>{agentNameById[participant.agentId] ?? participant.agentId}</strong>
+                          <small>
+                            收 {participant.receiveMode === "all" ? "全" : "@"} · 回{" "}
+                            {participant.replyMode === "all" ? "全" : "@"}
+                          </small>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div className="actions">
+                <div className="actions chat-thread-actions">
                   <button className="ghost" disabled={disabled} onClick={() => void clearMessages()} type="button">
-                    清空消息
+                    清空
                   </button>
                   <button
                     className="ghost"
@@ -612,33 +623,58 @@ export function ChatWorkspace({
                     }}
                     type="button"
                   >
-                    会话设置
+                    设置
                   </button>
                 </div>
               </div>
 
-              <div className="chat-log chat-log-standalone">
+              {notice && <div className="chat-thread-banner">{notice}</div>}
+              {error && errorDisplay && (
+                <div className="chat-thread-banner is-error">
+                  <strong>{errorDisplay.title}</strong>
+                  <span>{errorDisplay.message}</span>
+                </div>
+              )}
+
+              <div className="chat-log chat-log-standalone chat-thread-log" ref={chatLogRef}>
                 {loadingMessages && <p className="hint">加载消息中...</p>}
                 {!loadingMessages && messages.length === 0 && (
-                  <p className="hint">发送第一条消息开始对话。使用 `@智能体名` 可以只触发指定参与者。</p>
+                  <div className="chat-thread-empty-state">
+                    <strong>还没有聊天记录</strong>
+                    <p>发送第一条消息开始对话，使用 `@智能体名` 定向参与者。</p>
+                  </div>
                 )}
                 {messages.map((message, index) => {
+                  const roleClass =
+                    message.role === "assistant"
+                      ? "assistant"
+                      : message.role === "user"
+                        ? "user"
+                        : "system";
                   const speaker =
                     message.role === "user"
                       ? "你"
                       : message.agentId
                         ? agentNameById[message.agentId] ?? message.agentId
                         : "系统";
-                  return (
-                    <div
-                      className={message.role === "assistant" ? "chat-bubble assistant" : "chat-bubble user"}
-                      key={`${message.createdAt}-${index}`}
-                    >
-                      <div className="chat-bubble-head">
-                        <strong>{speaker}</strong>
-                        <small>{formatDateTime(message.createdAt)}</small>
+                  if (roleClass === "system") {
+                    return (
+                      <div className="chat-system-row" key={`${message.createdAt}-${index}`}>
+                        <span className="chat-system-badge">{speaker}</span>
+                        <p>{message.content}</p>
                       </div>
-                      <div>{message.content}</div>
+                    );
+                  }
+                  return (
+                    <div className={`chat-message-row ${roleClass}`} key={`${message.createdAt}-${index}`}>
+                      <div className={`chat-message-avatar ${roleClass}`}>{buildAvatarLabel(speaker)}</div>
+                      <div className={`chat-bubble ${roleClass === "assistant" ? "assistant" : "user"}`}>
+                        <div className="chat-bubble-head">
+                          <strong>{speaker}</strong>
+                          <small>{formatDateTime(message.createdAt)}</small>
+                        </div>
+                        <p>{message.content}</p>
+                      </div>
                     </div>
                   );
                 })}
@@ -647,15 +683,20 @@ export function ChatWorkspace({
               <div className="chat-composer card">
                 <textarea
                   onChange={(event) => setComposer(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
                   placeholder="输入消息；如果会话里有仅 @ 回复的智能体，可以使用 @名称 定向触发。"
                   rows={4}
                   value={composer}
                 />
                 <div className="chat-composer-actions">
-                  <small className="hint">
-                    当前会话 {selectedSession.isGroup ? "包含多名智能体" : "仅包含一个智能体"}。
-                    {streaming ? " 正在生成回复，可手动停止。" : ""}
-                  </small>
+                  <div className="chat-composer-hints">
+                    <span className="chat-composer-chip">
+                      {selectedSession.isGroup ? "群聊模式" : "单聊模式"}
+                    </span>
+                    <span className="chat-composer-chip">Enter 发送</span>
+                    <span className="chat-composer-chip">Shift + Enter 换行</span>
+                    {streaming && <span className="chat-composer-chip is-live">正在生成</span>}
+                  </div>
                   <div className="actions">
                     {streaming && (
                       <button className="ghost" onClick={stopGeneration} type="button">
@@ -668,39 +709,98 @@ export function ChatWorkspace({
                       onClick={() => void sendMessage()}
                       type="button"
                     >
-                      {sending ? "发送中..." : "发送消息"}
+                      {sending ? "发送中..." : "发送"}
                     </button>
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           ) : (
-            <article className="card">
-              <p className="hint">请选择一个会话，或先新建会话。</p>
-              <div className="actions">
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setCreateDraft(createSessionDraft(agents));
-                    setShowCreateModal(true);
-                  }}
-                  type="button"
-                >
-                  新建会话
-                </button>
+            <div className="chat-thread-shell chat-thread-empty-shell">
+              <div className="chat-thread-empty-state">
+                <strong>请选择一个会话</strong>
+                <p>右侧会话列表用于切换线程，也可以直接新建单聊或群聊。</p>
+                <div className="actions">
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setCreateDraft(createSessionDraft(agents));
+                      setShowCreateModal(true);
+                    }}
+                    type="button"
+                  >
+                    新建会话
+                  </button>
+                </div>
               </div>
-            </article>
+            </div>
           )}
         </div>
-      </div>
 
-      {notice && <div className="hint workspace-chat-notice">{notice}</div>}
-      {error && errorDisplay && (
-        <div className="error-box">
-          <strong>{errorDisplay.title}</strong>
-          <div>{errorDisplay.message}</div>
-        </div>
-      )}
+        <aside className="chat-session-sidebar">
+          <div className="chat-session-sidebar-head">
+            <div>
+              <strong>会话列表</strong>
+              <small>{sessions.length} 个会话</small>
+            </div>
+            <div className="actions chat-session-sidebar-tools">
+              <button className="ghost" onClick={() => void loadSessions(selectedSessionId)} type="button">
+                刷新
+              </button>
+              <button
+                className="primary"
+                onClick={() => {
+                  setCreateDraft(createSessionDraft(agents));
+                  setShowCreateModal(true);
+                }}
+                type="button"
+              >
+                新建
+              </button>
+            </div>
+          </div>
+          <div className="chat-session-list">
+            {loadingSessions && <p className="hint">加载会话中...</p>}
+            {!loadingSessions && sessions.length === 0 && (
+              <p className="hint">还没有会话，先创建一个单聊或群组会话。</p>
+            )}
+            {sessions.map((session) => {
+              const sessionParticipants = session.participants.map(
+                (item) => agentNameById[item.agentId] ?? item.agentId,
+              );
+              return (
+                <button
+                  className={session.id === selectedSessionId ? "chat-session-item active" : "chat-session-item"}
+                  key={session.id}
+                  onClick={() => setSelectedSessionId(session.id)}
+                  type="button"
+                >
+                  <div className="chat-session-avatar">
+                    {session.isGroup ? "群" : buildAvatarLabel(sessionParticipants[0] ?? session.title)}
+                  </div>
+                  <div className="chat-session-item-body">
+                    <div className="chat-session-item-top">
+                      <strong>{session.title}</strong>
+                      <small>{formatDateTime(session.updatedAt)}</small>
+                    </div>
+                    <div className="chat-session-item-meta">
+                      <span>{session.isGroup ? "群聊" : "单聊"}</span>
+                      {session.isPinned && <span>置顶</span>}
+                      {session.isArchived && <span>归档</span>}
+                    </div>
+                    <small className="chat-session-item-members">
+                      {sessionParticipants.join(" · ") || "暂无参与者"}
+                    </small>
+                    <span className="chat-session-item-preview">
+                      {session.lastMessagePreview ?? "暂无消息"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+      </div>
 
       {showCreateModal && (
         <FormModal title="新建会话" onClose={() => setShowCreateModal(false)}>
