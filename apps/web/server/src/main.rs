@@ -17,19 +17,56 @@ use girl_ai_agent_core::{
     OpenAICompatChatGateway, ProbeModelConnectionRequest, ProbeModelConnectionResponse,
     ProbeProviderConnectionRequest, ProbeProviderConnectionResponse, RegenerateChatReplyRequest,
     RenameChatSessionRequest, RewriteChatUserMessageRequest, RewriteLastUserMessageRequest,
-    RuntimeStatusResponse, SetChatSessionArchivedRequest, SetChatSessionPinnedRequest,
-    SetChatSessionTagsRequest, SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse,
-    UpdateAgentRequest, UpdateModelRequest, UpdateProviderRequest,
-    UpdateWorkspaceChatSessionRequest,
+    SetChatSessionArchivedRequest, SetChatSessionPinnedRequest, SetChatSessionTagsRequest,
+    SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse, UpdateAgentRequest,
+    UpdateModelRequest, UpdateProviderRequest, UpdateWorkspaceChatSessionRequest,
 };
+use serde::Serialize;
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
+
+const APP_NAME: &str = "Girl-Ai-Agent";
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+const API_VERSION: &str = "1.0.0";
+const CHAT_GATEWAY_KIND: &str = "openai_compat";
 
 #[derive(Clone)]
 struct AppState {
     service: AppService<SqliteStore>,
     chat_gateway: OpenAICompatChatGateway,
     bearer_token: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderPreset {
+    id: &'static str,
+    name: &'static str,
+    api_base: &'static str,
+    supports_multi_key: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppBootstrap {
+    app_name: &'static str,
+    app_version: &'static str,
+    api_version: &'static str,
+    provider_presets: Vec<ProviderPreset>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeStatusResponse {
+    app_name: &'static str,
+    app_version: &'static str,
+    api_version: &'static str,
+    chat_gateway_kind: &'static str,
+    provider_count: i64,
+    model_count: i64,
+    agent_count: i64,
+    session_count: i64,
+    message_count: i64,
 }
 
 type ApiResponse<T> = Result<Json<T>, (StatusCode, Json<ErrorPayload>)>;
@@ -88,7 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let store = SqliteStore::connect(&db_url).await?;
     let state = AppState {
-        service: AppService::new(Arc::new(store), "Girl-Ai-Agent", "0.1.0"),
+        service: AppService::new(Arc::new(store)),
         chat_gateway: OpenAICompatChatGateway::new(),
         bearer_token: token,
     };
@@ -249,14 +286,85 @@ fn map_error(error: AppError) -> (StatusCode, Json<ErrorPayload>) {
     (status, Json(payload))
 }
 
+fn provider_presets() -> Vec<ProviderPreset> {
+    vec![
+        ProviderPreset {
+            id: "openai",
+            name: "OpenAI",
+            api_base: "https://api.openai.com/v1",
+            supports_multi_key: true,
+        },
+        ProviderPreset {
+            id: "anthropic",
+            name: "Anthropic",
+            api_base: "https://api.anthropic.com/v1",
+            supports_multi_key: true,
+        },
+        ProviderPreset {
+            id: "openrouter",
+            name: "OpenRouter",
+            api_base: "https://openrouter.ai/api/v1",
+            supports_multi_key: true,
+        },
+        ProviderPreset {
+            id: "google",
+            name: "Google Gemini",
+            api_base: "https://generativelanguage.googleapis.com/v1beta",
+            supports_multi_key: false,
+        },
+        ProviderPreset {
+            id: "ollama",
+            name: "Ollama (Local)",
+            api_base: "http://127.0.0.1:11434/v1",
+            supports_multi_key: false,
+        },
+        ProviderPreset {
+            id: "lmstudio",
+            name: "LM Studio (Local)",
+            api_base: "http://127.0.0.1:1234/v1",
+            supports_multi_key: false,
+        },
+    ]
+}
+
+fn build_bootstrap() -> AppBootstrap {
+    AppBootstrap {
+        app_name: APP_NAME,
+        app_version: APP_VERSION,
+        api_version: API_VERSION,
+        provider_presets: provider_presets(),
+    }
+}
+
+fn build_runtime_status(stats: girl_ai_agent_core::RuntimeStats) -> RuntimeStatusResponse {
+    RuntimeStatusResponse {
+        app_name: APP_NAME,
+        app_version: APP_VERSION,
+        api_version: API_VERSION,
+        chat_gateway_kind: CHAT_GATEWAY_KIND,
+        provider_count: stats.provider_count,
+        model_count: stats.model_count,
+        agent_count: stats.agent_count,
+        session_count: stats.session_count,
+        message_count: stats.message_count,
+    }
+}
+
 async fn get_bootstrap(
     State(state): State<AppState>,
-) -> ApiResponse<girl_ai_agent_core::BootstrapResponse> {
-    state.service.bootstrap().await.map(Json).map_err(map_error)
+) -> ApiResponse<AppBootstrap> {
+    let _ = state;
+    Ok(Json(build_bootstrap()))
 }
 
 async fn get_runtime_status(State(state): State<AppState>) -> ApiResponse<RuntimeStatusResponse> {
-    state.service.runtime_status().await.map(Json).map_err(map_error)
+    state
+        .service
+        .runtime_stats()
+        .await
+        .map(build_runtime_status)
+        .map(Json)
+        .map_err(map_error)
 }
 
 async fn list_providers(

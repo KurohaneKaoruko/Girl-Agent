@@ -6,19 +6,57 @@ use girl_ai_agent_core::{
     CreateProviderRequest, CreateWorkspaceChatSessionRequest, ErrorPayload,
     OpenAICompatChatGateway, ProbeModelConnectionRequest, ProbeModelConnectionResponse,
     ProbeProviderConnectionRequest, ProbeProviderConnectionResponse, RegenerateChatReplyRequest,
-    RewriteChatUserMessageRequest, RewriteLastUserMessageRequest, RuntimeStatusResponse,
-    SqliteStore, UndoLastChatTurnRequest, UndoLastChatTurnResponse, UpdateAgentRequest,
-    UpdateModelRequest, UpdateProviderRequest, UpdateWorkspaceChatSessionRequest,
+    RewriteChatUserMessageRequest, RewriteLastUserMessageRequest, SqliteStore,
+    UndoLastChatTurnRequest, UndoLastChatTurnResponse, UpdateAgentRequest, UpdateModelRequest,
+    UpdateProviderRequest, UpdateWorkspaceChatSessionRequest,
     WorkspaceChatMessage, WorkspaceChatSession,
 };
+use serde::Serialize;
 use tauri::State;
 
 type CommandResult<T> = Result<T, ErrorPayload>;
+
+const APP_NAME: &str = "Girl-Ai-Agent";
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+const API_VERSION: &str = "1.0.0";
+const CHAT_GATEWAY_KIND: &str = "openai_compat";
 
 #[derive(Clone)]
 struct AppState {
     service: AppService<SqliteStore>,
     chat_gateway: OpenAICompatChatGateway,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderPreset {
+    id: &'static str,
+    name: &'static str,
+    api_base: &'static str,
+    supports_multi_key: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppBootstrap {
+    app_name: &'static str,
+    app_version: &'static str,
+    api_version: &'static str,
+    provider_presets: Vec<ProviderPreset>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeStatusResponse {
+    app_name: &'static str,
+    app_version: &'static str,
+    api_version: &'static str,
+    chat_gateway_kind: &'static str,
+    provider_count: i64,
+    model_count: i64,
+    agent_count: i64,
+    session_count: i64,
+    message_count: i64,
 }
 
 fn map_command_result<T>(result: AppResult<T>) -> CommandResult<T> {
@@ -29,6 +67,70 @@ fn database_url() -> String {
     std::env::var("GIRL_AI_AGENT_DB_URL").unwrap_or_else(|_| "sqlite://girl-ai-agent.db".to_string())
 }
 
+fn provider_presets() -> Vec<ProviderPreset> {
+    vec![
+        ProviderPreset {
+            id: "openai",
+            name: "OpenAI",
+            api_base: "https://api.openai.com/v1",
+            supports_multi_key: true,
+        },
+        ProviderPreset {
+            id: "anthropic",
+            name: "Anthropic",
+            api_base: "https://api.anthropic.com/v1",
+            supports_multi_key: true,
+        },
+        ProviderPreset {
+            id: "openrouter",
+            name: "OpenRouter",
+            api_base: "https://openrouter.ai/api/v1",
+            supports_multi_key: true,
+        },
+        ProviderPreset {
+            id: "google",
+            name: "Google Gemini",
+            api_base: "https://generativelanguage.googleapis.com/v1beta",
+            supports_multi_key: false,
+        },
+        ProviderPreset {
+            id: "ollama",
+            name: "Ollama (Local)",
+            api_base: "http://127.0.0.1:11434/v1",
+            supports_multi_key: false,
+        },
+        ProviderPreset {
+            id: "lmstudio",
+            name: "LM Studio (Local)",
+            api_base: "http://127.0.0.1:1234/v1",
+            supports_multi_key: false,
+        },
+    ]
+}
+
+fn build_bootstrap() -> AppBootstrap {
+    AppBootstrap {
+        app_name: APP_NAME,
+        app_version: APP_VERSION,
+        api_version: API_VERSION,
+        provider_presets: provider_presets(),
+    }
+}
+
+fn build_runtime_status(stats: girl_ai_agent_core::RuntimeStats) -> RuntimeStatusResponse {
+    RuntimeStatusResponse {
+        app_name: APP_NAME,
+        app_version: APP_VERSION,
+        api_version: API_VERSION,
+        chat_gateway_kind: CHAT_GATEWAY_KIND,
+        provider_count: stats.provider_count,
+        model_count: stats.model_count,
+        agent_count: stats.agent_count,
+        session_count: stats.session_count,
+        message_count: stats.message_count,
+    }
+}
+
 #[tauri::command]
 fn ping(message: String) -> String {
     format!("Girl-Ai-Agent backend received: {message}")
@@ -36,14 +138,14 @@ fn ping(message: String) -> String {
 
 #[tauri::command]
 async fn get_bootstrap_data(
-    state: State<'_, AppState>,
-) -> CommandResult<girl_ai_agent_core::BootstrapResponse> {
-    map_command_result(state.service.bootstrap().await)
+    _state: State<'_, AppState>,
+) -> CommandResult<AppBootstrap> {
+    Ok(build_bootstrap())
 }
 
 #[tauri::command]
 async fn get_runtime_status(state: State<'_, AppState>) -> CommandResult<RuntimeStatusResponse> {
-    map_command_result(state.service.runtime_status().await)
+    map_command_result(state.service.runtime_stats().await).map(build_runtime_status)
 }
 
 #[tauri::command]
@@ -438,7 +540,7 @@ async fn clear_chat_session_messages(
 pub fn run() {
     let store = tauri::async_runtime::block_on(SqliteStore::connect(&database_url()))
         .expect("failed to initialize sqlite store");
-    let service = AppService::new(Arc::new(store), "Girl-Ai-Agent", "0.1.0");
+    let service = AppService::new(Arc::new(store));
 
     tauri::Builder::default()
         .manage(AppState {

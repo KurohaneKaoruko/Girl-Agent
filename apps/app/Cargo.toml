@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 girl-ai-agent-core.workspace = true
+serde.workspace = true
 tauri = { version = "2", features = [] }
 
 [features]

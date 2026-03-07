@@ -1262,6 +1262,7 @@ name = "girl-ai-agent-app"
 version = "0.1.0"
 dependencies = [
  "girl-ai-agent-core",
+ "serde",
  "tauri",
  "tauri-build",
 ]
@@ -1271,6 +1272,7 @@ name = "girl-ai-agent-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "rand 0.8.5",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
