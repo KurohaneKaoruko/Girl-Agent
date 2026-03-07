@@ -1,13 +1,13 @@
-# 少女智能体 GirlAgent
+# 少女智能体 Girl-Ai-Agent
 
 简体中文 | [English](./README.en.md) | [日本語](./README.ja.md)
 
-「少女智能体」（GirlAgent）是一个 AI 智能体平台，目标是打造可连接任意 AI 应用、功能丰富的智能体系统。
+「少女智能体」（Girl-Ai-Agent）是一个 AI 智能体平台，目标是打造可连接任意 AI 应用、功能丰富的智能体系统。
 
 ## 项目结构
 
 ```text
-GirlAgent/
+Girl-Ai-Agent/
 ├─ docs/                        # 产品与架构文档
 └─ apps/
    ├─ web/
@@ -52,8 +52,8 @@ cargo tauri build --manifest-path apps/app/Cargo.toml
 4. 启动无头版（默认监听 `127.0.0.1:8787`）：
 
 ```powershell
-$env:GIRLAGENT_TOKEN="your_token"
-cargo run -p girlagent-web-server
+$env:GIRL_AI_AGENT_TOKEN="your_token"
+cargo run -p girl-ai-agent-web-server
 ```
 
 ## 当前范围
@@ -77,19 +77,19 @@ cargo run -p girlagent-web-server
 cargo check --workspace
 
 # 无头版验收（自动起服务 + 配置 + 可选聊天验证）
-$env:GIRLAGENT_PROVIDER_KEY="your_provider_key"
+$env:GIRL_AI_AGENT_PROVIDER_KEY="your_provider_key"
 pnpm run verify:headless
 
 # 显式 smoke / full 两档
 pnpm run verify:headless:smoke
 pnpm run verify:headless:full
-# full 需要提供真实 Key（环境变量 GIRLAGENT_PROVIDER_KEY 或脚本参数 -ProviderKey）
+# full 需要提供真实 Key（环境变量 GIRL_AI_AGENT_PROVIDER_KEY 或脚本参数 -ProviderKey）
 # full 默认额外验证 /api/chat/stream（SSE）
 # 如需仅验证非流式聊天，可使用：
 pnpm run verify:headless:full:no-stream
 # 如需额外验证“流式中途停止”，可使用：
 pnpm run verify:headless:full:abort
-# CI 中可通过仓库 Secret `GIRLAGENT_PROVIDER_KEY` 自动启用 full/full:abort
+# CI 中可通过仓库 Secret `GIRL_AI_AGENT_PROVIDER_KEY` 自动启用 full/full:abort
 # GitHub Actions 支持 workflow_dispatch 输入 `run_full` / `run_abort` 手动分档执行
 # `headless-verify` 任务会上传 target 下的 verify JSON artifact
 
@@ -114,3 +114,4 @@ pnpm run moon:check
 ## 本地联调 Core（可选）
 
 如需在本机调试 Core，请复制 `.cargo/config.toml.example` 为 `.cargo/config.toml`，启用本地 path 覆盖。
+

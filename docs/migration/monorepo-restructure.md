@@ -11,14 +11,14 @@
 
 迁移为三层结构：
 
-- `GirlAgent-Core`
+- `Girl-Ai-Agent-Core`
 - `apps/web/server`
 - `apps/web/console`
 - `apps/app`
 
 ## 映射关系
 
-- `src-core/**` -> `GirlAgent-Core/**`
+- `src-core/**` -> `Girl-Ai-Agent-Core/**`
 - `src-headless/**` -> `apps/web/server/**`
 - `src-frontend/**` -> `apps/web/console/**`
 - `src-tauri/**` -> `apps/app/**`
@@ -26,6 +26,7 @@
 ## 同步调整
 
 - Cargo workspace 成员路径已更新
-- 无头服务 crate 名从 `girlagent-headless` 调整为 `girlagent-web-server`
+- 无头服务 crate 名从 `girl-ai-agent-headless` 调整为 `girl-ai-agent-web-server`
 - Tauri 前端构建路径改为 `apps/web/console`
 - 新增 `pnpm-workspace.yaml` 与 `Moonrepo` 配置
+

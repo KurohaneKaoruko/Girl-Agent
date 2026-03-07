@@ -1,22 +1,23 @@
 [package]
-name = "girlagent-app"
+name = "girl-ai-agent-app"
 version = "0.1.0"
-description = "GirlAgent app host backend powered by Rust and Tauri."
-authors = ["GirlAgent Team"]
+description = "Girl-Ai-Agent app host backend powered by Rust and Tauri."
+authors = ["Girl-Ai-Agent Team"]
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "girlagent_lib"
+name = "girl_ai_agent_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-girlagent-core.workspace = true
+girl-ai-agent-core.workspace = true
 tauri = { version = "2", features = [] }
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+

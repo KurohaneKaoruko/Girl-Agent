@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Girl-AI-Agent",
+  "productName": "Girl-Ai-Agent",
   "version": "0.1.0",
-  "identifier": "com.girlagent.app",
+  "identifier": "com.girl-ai-agent.app",
   "build": {
     "beforeDevCommand": "pnpm --dir apps/web/console dev",
     "beforeBuildCommand": "pnpm --dir apps/web/console build",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Girl-AI-Agent",
+        "title": "Girl-Ai-Agent",
         "width": 1200,
         "height": 820,
         "resizable": true
@@ -28,3 +28,4 @@
     "icon": []
   }
 }
+

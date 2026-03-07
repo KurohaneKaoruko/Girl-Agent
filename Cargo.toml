@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT"
-authors = ["GirlAgent Team"]
+authors = ["Girl-Ai-Agent Team"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -19,4 +19,5 @@ axum = "0.7"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
 url = "2"
-girlagent-core = { git = "https://github.com/KurohaneKaoruko/Girl-Agent-Core.git", rev = "ac668553e1846adc0618f868bb1ba096f232a4ff" }
+girl-ai-agent-core = { git = "https://github.com/KurohaneKaoruko/Girl-Agent-Core.git", rev = "ac668553e1846adc0618f868bb1ba096f232a4ff" }
+

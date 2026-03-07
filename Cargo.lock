@@ -1258,16 +1258,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "girlagent-app"
+name = "girl-ai-agent-app"
 version = "0.1.0"
 dependencies = [
- "girlagent-core",
+ "girl-ai-agent-core",
  "tauri",
  "tauri-build",
 ]
 
 [[package]]
-name = "girlagent-core"
+name = "girl-ai-agent-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1281,13 +1281,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "girlagent-web-server"
+name = "girl-ai-agent-web-server"
 version = "0.1.0"
 dependencies = [
  "async-stream",
  "axum",
  "futures-core",
- "girlagent-core",
+ "girl-ai-agent-core",
  "serde",
  "serde_json",
  "tokio",

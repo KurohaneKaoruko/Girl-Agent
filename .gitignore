@@ -57,7 +57,7 @@ apps/app/.tauri/
 .moon/cache/
 
 # Optional local checkout of independent Core repository
-GirlAgent-Core/
+Girl-Ai-Agent-Core/
 
 # ------------------------------------------------------------
 # IDE / editor
@@ -74,3 +74,4 @@ GirlAgent-Core/
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+

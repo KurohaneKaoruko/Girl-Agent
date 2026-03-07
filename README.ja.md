@@ -1,13 +1,13 @@
-# GirlAgent
+# Girl-Ai-Agent
 
 [简体中文](./README.md) | [English](./README.en.md) | 日本語
 
-GirlAgent は、あらゆる AI アプリケーションに接続できる高機能な「少女エージェント」を構築するための AI エージェントプラットフォームです。
+Girl-Ai-Agent は、あらゆる AI アプリケーションに接続できる高機能な「少女エージェント」を構築するための AI エージェントプラットフォームです。
 
 ## プロジェクト構成
 
 ```text
-GirlAgent/
+Girl-Ai-Agent/
 ├─ docs/                        # プロダクト・アーキテクチャ文書
 └─ apps/
    ├─ web/
@@ -52,8 +52,8 @@ cargo tauri build --manifest-path apps/app/Cargo.toml
 4. ヘッドレス版を起動（既定 `127.0.0.1:8787`）:
 
 ```powershell
-$env:GIRLAGENT_TOKEN="your_token"
-cargo run -p girlagent-web-server
+$env:GIRL_AI_AGENT_TOKEN="your_token"
+cargo run -p girl-ai-agent-web-server
 ```
 
 ## 現在のスコープ
@@ -81,3 +81,4 @@ pnpm run moon:check
 ## Core のローカル上書き（任意）
 
 Core をローカルで同時開発する場合は `.cargo/config.toml.example` を `.cargo/config.toml` にコピーして path patch を有効化してください。
+

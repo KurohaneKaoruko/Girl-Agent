@@ -1,5 +1,5 @@
 {
-  "name": "girlagent-monorepo",
+  "name": "girl-ai-agent-monorepo",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@10.6.0",
@@ -8,7 +8,7 @@
     "dev:app": "cargo tauri dev --manifest-path apps/app/Cargo.toml",
     "build:web": "pnpm --dir apps/web/console build",
     "build:app": "cargo tauri build --manifest-path apps/app/Cargo.toml",
-    "run:web-server": "cargo run -p girlagent-web-server",
+    "run:web-server": "cargo run -p girl-ai-agent-web-server",
     "verify:headless": "pwsh -NoProfile -Command \"& './scripts/verify-headless.ps1' -Mode smoke\"",
     "verify:headless:smoke": "pwsh -NoProfile -Command \"& './scripts/verify-headless.ps1' -Mode smoke\"",
     "verify:headless:full": "pwsh -NoProfile -Command \"& './scripts/verify-headless.ps1' -Mode full\"",
@@ -18,11 +18,12 @@
     "verify:headless:running": "pwsh -NoProfile -Command \"& './scripts/verify-headless.ps1' -Mode smoke -NoStartServer\"",
     "verify:headless:ci": "pwsh -NoProfile -Command \"& './scripts/verify-headless.ps1' -Mode smoke -PrintResultJson\"",
     "check:rust": "cargo check --workspace",
-    "check:web-server": "cargo check -p girlagent-web-server",
-    "check:app": "cargo check -p girlagent-app",
+    "check:web-server": "cargo check -p girl-ai-agent-web-server",
+    "check:app": "cargo check -p girl-ai-agent-app",
     "moon:check": "moon run web-server:check && moon run app:check"
   },
   "devDependencies": {
     "@moonrepo/cli": "^1.30.6"
   }
 }
+

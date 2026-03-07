@@ -31,7 +31,7 @@ import type {
 type MainSection = "overview" | "chat" | "provider" | "model" | "agent" | "settings";
 
 const fallbackBootstrap: AppBootstrap = {
-  appName: "Girl-AI-Agent",
+  appName: "Girl-Ai-Agent",
   appVersion: "0.1.0",
   apiVersion: "1.0.0",
   providerPresets: [],
@@ -39,7 +39,7 @@ const fallbackBootstrap: AppBootstrap = {
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const api = getApiClient();
-const LOGIN_SESSION_KEY = "girlagent.console.loggedIn.v1";
+const LOGIN_SESSION_KEY = "girl-ai-agent.console.loggedIn.v1";
 const MOBILE_NAV_MEDIA_QUERY = "(max-width: 880px)";
 
 const navItems: Array<{ key: MainSection; label: string; caption: string }> = [
@@ -315,7 +315,7 @@ export function App() {
         <div className="app-brand">
           <div className="app-brand-main">
             <span className="app-brand-kicker">少女智能体控制台</span>
-            <h1>Girl-AI-Agent</h1>
+            <h1>Girl-Ai-Agent</h1>
           </div>
           <button
             aria-controls="console-nav"
@@ -630,3 +630,4 @@ export function App() {
     </main>
   );
 }
+

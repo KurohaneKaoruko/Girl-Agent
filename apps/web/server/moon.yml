@@ -7,11 +7,12 @@ tasks:
     args:
       - "check"
       - "-p"
-      - "girlagent-web-server"
+      - "girl-ai-agent-web-server"
 
   dev:
     command: "cargo"
     args:
       - "run"
       - "-p"
-      - "girlagent-web-server"
+      - "girl-ai-agent-web-server"
+

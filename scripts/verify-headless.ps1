@@ -1,7 +1,7 @@
 param(
-  [string]$BaseUrl = $(if ($env:GIRLAGENT_BASE_URL) { $env:GIRLAGENT_BASE_URL } else { "http://127.0.0.1:8787" }),
-  [string]$Token = $(if ($env:GIRLAGENT_TOKEN) { $env:GIRLAGENT_TOKEN } else { "verify-token" }),
-  [string]$ProviderKey = $env:GIRLAGENT_PROVIDER_KEY,
+  [string]$BaseUrl = $(if ($env:GIRL_AI_AGENT_BASE_URL) { $env:GIRL_AI_AGENT_BASE_URL } else { "http://127.0.0.1:8787" }),
+  [string]$Token = $(if ($env:GIRL_AI_AGENT_TOKEN) { $env:GIRL_AI_AGENT_TOKEN } else { "verify-token" }),
+  [string]$ProviderKey = $env:GIRL_AI_AGENT_PROVIDER_KEY,
   [string]$ModelId = "gpt-4.1-mini",
   [string]$PresetId = "",
   [ValidateSet("smoke", "full")][string]$Mode = "smoke",
@@ -75,7 +75,7 @@ function Write-ResultJson([object]$payload) {
     $candidatePaths.Add((Join-Path $script:projectRoot "target\verify-headless-result.json"))
   }
   $candidatePaths.Add((Join-Path (Get-Location).Path "verify-headless-result.json"))
-  $candidatePaths.Add((Join-Path ([System.IO.Path]::GetTempPath()) "girlagent-verify-result.json"))
+  $candidatePaths.Add((Join-Path ([System.IO.Path]::GetTempPath()) "girl-ai-agent-verify-result.json"))
 
   $jsonText = $payload | ConvertTo-Json -Depth 30
   foreach ($path in $candidatePaths) {
@@ -332,10 +332,10 @@ try {
     Throw-VerifyError -Code "MODE_CONFLICT" -Message "VerifyStreamAbort requires chat verification. Remove -SkipChat."
   }
   if (($Mode -eq "full") -and [string]::IsNullOrWhiteSpace($ProviderKey)) {
-    Throw-VerifyError -Code "PROVIDER_KEY_REQUIRED" -Message "Mode full requires ProviderKey (use GIRLAGENT_PROVIDER_KEY or -ProviderKey)."
+    Throw-VerifyError -Code "PROVIDER_KEY_REQUIRED" -Message "Mode full requires ProviderKey (use GIRL_AI_AGENT_PROVIDER_KEY or -ProviderKey)."
   }
 
-  $baseUrlSpecified = $PSBoundParameters.ContainsKey("BaseUrl") -or (-not [string]::IsNullOrWhiteSpace($env:GIRLAGENT_BASE_URL))
+  $baseUrlSpecified = $PSBoundParameters.ContainsKey("BaseUrl") -or (-not [string]::IsNullOrWhiteSpace($env:GIRL_AI_AGENT_BASE_URL))
   $startServer = -not $NoStartServer
   $result.startServer = $startServer
 
@@ -369,7 +369,7 @@ try {
     $uri = [Uri]$BaseUrl
     if ((Test-PortInUse -Port $uri.Port) -and (-not (Test-HealthOnce -ProbeUrl $BaseUrl))) {
       if ($baseUrlSpecified) {
-        Throw-VerifyError -Code "PORT_IN_USE" -Message "port $($uri.Port) is in use, and no healthy GirlAgent service was found at $BaseUrl"
+        Throw-VerifyError -Code "PORT_IN_USE" -Message "port $($uri.Port) is in use, and no healthy Girl-Ai-Agent service was found at $BaseUrl"
       }
       $freePort = Get-FreeLocalPort
       $BaseUrl = "http://127.0.0.1:$freePort"
@@ -379,16 +379,16 @@ try {
     }
 
     $bind = "{0}:{1}" -f $uri.Host, $uri.Port
-    if (-not $env:GIRLAGENT_DB_URL) {
-      $env:GIRLAGENT_DB_URL = "sqlite://girlagent-verify.db"
+    if (-not $env:GIRL_AI_AGENT_DB_URL) {
+      $env:GIRL_AI_AGENT_DB_URL = "sqlite://girl-ai-agent-verify.db"
     }
-    $env:GIRLAGENT_BIND = $bind
-    $env:GIRLAGENT_TOKEN = $Token
+    $env:GIRL_AI_AGENT_BIND = $bind
+    $env:GIRL_AI_AGENT_TOKEN = $Token
 
     Write-Step "starting headless server at $BaseUrl"
     $serverProcess = Start-Process `
       -FilePath "cargo" `
-      -ArgumentList @("run", "-p", "girlagent-web-server") `
+      -ArgumentList @("run", "-p", "girl-ai-agent-web-server") `
       -WorkingDirectory $script:projectRoot `
       -PassThru `
       -WindowStyle Hidden
@@ -527,7 +527,7 @@ try {
   $skipChatRun = $SkipChat.IsPresent
   if ((-not $skipChatRun) -and [string]::IsNullOrWhiteSpace($ProviderKey)) {
     $skipChatRun = $true
-    Write-Step "chat step skipped: GIRLAGENT_PROVIDER_KEY is empty"
+    Write-Step "chat step skipped: GIRL_AI_AGENT_PROVIDER_KEY is empty"
   }
 
   if (-not $skipChatRun) {
@@ -692,3 +692,4 @@ try {
     }
   }
 }
+

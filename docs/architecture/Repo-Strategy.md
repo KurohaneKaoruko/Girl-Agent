@@ -1,23 +1,23 @@
-# GirlAgent 分仓策略（支持多应用复用 Core）
+# Girl-Ai-Agent 分仓策略（支持多应用复用 Core）
 
 ## 目标
 
-在保证 GirlAgent 主项目持续迭代的同时，让后续其他应用能稳定复用 `GirlAgent-Core`，避免重复实现核心 AI 功能。
+在保证 Girl-Ai-Agent 主项目持续迭代的同时，让后续其他应用能稳定复用 `Girl-Ai-Agent-Core`，避免重复实现核心 AI 功能。
 
 ## 推荐仓库模型
 
 使用 `1 Core + N App` 的多仓结构：
 
-1. `GirlAgent-Core`（独立仓库）
+1. `Girl-Ai-Agent-Core`（独立仓库）
 - 仅包含通用核心能力（领域模型、服务层、存储抽象、错误模型、协议适配接口）
 - 不包含任何产品 UI、桥接插件、品牌逻辑
 
-2. `GirlAgent`（产品仓库）
-- 依赖 `GirlAgent-Core`
+2. `Girl-Ai-Agent`（产品仓库）
+- 依赖 `Girl-Ai-Agent-Core`
 - 包含桌面版、无头版、完整桥接能力
 
 3. `Another-App`（产品仓库示例）
-- 依赖 `GirlAgent-Core`
+- 依赖 `Girl-Ai-Agent-Core`
 - 聚焦纯软件内交互体验，不强制引入丰富桥接能力
 
 ## 依赖策略
@@ -35,9 +35,9 @@ Core 必须保持“宿主无关”：
 
 ## 发布与升级流程
 
-1. 在 `GirlAgent-Core` 完成功能并通过测试
+1. 在 `Girl-Ai-Agent-Core` 完成功能并通过测试
 2. 发布新版本（例如 `v0.5.2`）
-3. `GirlAgent` / 其他应用分别升级依赖并运行集成测试
+3. `Girl-Ai-Agent` / 其他应用分别升级依赖并运行集成测试
 4. 若涉及兼容变更，按迁移指南修改应用层代码
 
 ## 本仓现阶段定位
@@ -52,3 +52,4 @@ Core 必须保持“宿主无关”：
 - `git@github.com:KurohaneKaoruko/Girl-Agent-Core.git`
 
 后续新应用应继续采用同样方式依赖 Core，而不是复制 Core 代码。
+

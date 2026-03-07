@@ -1,12 +1,12 @@
-# GirlAgent 无头版 API（V1 最小可用）
+# Girl-Ai-Agent 无头版 API（V1 最小可用）
 
 ## 启动参数
 
 通过环境变量控制：
 
-- `GIRLAGENT_BIND`：监听地址，默认 `127.0.0.1:8787`
-- `GIRLAGENT_DB_URL`：SQLite 连接串，默认 `sqlite://girlagent.db`
-- `GIRLAGENT_TOKEN`：Bearer Token；不设置时启动会生成一次随机 Token 并打印
+- `GIRL_AI_AGENT_BIND`：监听地址，默认 `127.0.0.1:8787`
+- `GIRL_AI_AGENT_DB_URL`：SQLite 连接串，默认 `sqlite://girl-ai-agent.db`
+- `GIRL_AI_AGENT_TOKEN`：Bearer Token；不设置时启动会生成一次随机 Token 并打印
 
 ## 鉴权
 
@@ -68,11 +68,11 @@
 
 ```powershell
 # smoke（默认）：不强制外网可达，可用于本地冒烟
-$env:GIRLAGENT_PROVIDER_KEY="your_provider_key"
+$env:GIRL_AI_AGENT_PROVIDER_KEY="your_provider_key"
 pnpm run verify:headless
 
 # full：强制连通探测通过 + 真实聊天验证
-$env:GIRLAGENT_PROVIDER_KEY="your_provider_key"
+$env:GIRL_AI_AGENT_PROVIDER_KEY="your_provider_key"
 pnpm run verify:headless:full
 # full 模式要求存在真实 Provider Key
 # full 默认包含 /api/chat/stream 回归验证
@@ -80,7 +80,7 @@ pnpm run verify:headless:full
 pnpm run verify:headless:full:no-stream
 # 如需额外验证“流式中途停止”：
 pnpm run verify:headless:full:abort
-# CI 中可通过仓库 Secret `GIRLAGENT_PROVIDER_KEY` 自动启用 full/full:abort
+# CI 中可通过仓库 Secret `GIRL_AI_AGENT_PROVIDER_KEY` 自动启用 full/full:abort
 # GitHub Actions workflow_dispatch 输入：
 # - run_full: 手动启用 full
 # - run_abort: 手动启用 full:abort
@@ -461,6 +461,7 @@ pnpm run verify:headless:summary
   "tags": ["工作", "规划"]
 }
 ```
+
 
 
 

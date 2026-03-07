@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use girlagent_core::{
+use girl_ai_agent_core::{
     AppResult, AppService, ChatMessage, ChatSession, ChatWithAgentRequest, ChatWithAgentResponse,
     ChatWithSessionRequest, ChatWithSessionResponse, CreateAgentRequest, CreateModelRequest,
     CreateProviderRequest, CreateWorkspaceChatSessionRequest, ErrorPayload,
@@ -26,18 +26,18 @@ fn map_command_result<T>(result: AppResult<T>) -> CommandResult<T> {
 }
 
 fn database_url() -> String {
-    std::env::var("GIRLAGENT_DB_URL").unwrap_or_else(|_| "sqlite://girlagent.db".to_string())
+    std::env::var("GIRL_AI_AGENT_DB_URL").unwrap_or_else(|_| "sqlite://girl-ai-agent.db".to_string())
 }
 
 #[tauri::command]
 fn ping(message: String) -> String {
-    format!("Girl-AI-Agent backend received: {message}")
+    format!("Girl-Ai-Agent backend received: {message}")
 }
 
 #[tauri::command]
 async fn get_bootstrap_data(
     state: State<'_, AppState>,
-) -> CommandResult<girlagent_core::BootstrapResponse> {
+) -> CommandResult<girl_ai_agent_core::BootstrapResponse> {
     map_command_result(state.service.bootstrap().await)
 }
 
@@ -49,7 +49,7 @@ async fn get_runtime_status(state: State<'_, AppState>) -> CommandResult<Runtime
 #[tauri::command]
 async fn list_providers(
     state: State<'_, AppState>,
-) -> CommandResult<Vec<girlagent_core::ProviderConfig>> {
+) -> CommandResult<Vec<girl_ai_agent_core::ProviderConfig>> {
     map_command_result(state.service.list_providers().await)
 }
 
@@ -57,7 +57,7 @@ async fn list_providers(
 async fn create_provider(
     state: State<'_, AppState>,
     input: CreateProviderRequest,
-) -> CommandResult<girlagent_core::ProviderConfig> {
+) -> CommandResult<girl_ai_agent_core::ProviderConfig> {
     map_command_result(state.service.create_provider(input).await)
 }
 
@@ -66,7 +66,7 @@ async fn update_provider(
     state: State<'_, AppState>,
     id: String,
     input: UpdateProviderRequest,
-) -> CommandResult<girlagent_core::ProviderConfig> {
+) -> CommandResult<girl_ai_agent_core::ProviderConfig> {
     map_command_result(state.service.update_provider(&id, input).await)
 }
 
@@ -86,7 +86,7 @@ async fn probe_provider_connection(
 #[tauri::command]
 async fn list_models(
     state: State<'_, AppState>,
-) -> CommandResult<Vec<girlagent_core::ModelConfig>> {
+) -> CommandResult<Vec<girl_ai_agent_core::ModelConfig>> {
     map_command_result(state.service.list_models().await)
 }
 
@@ -94,7 +94,7 @@ async fn list_models(
 async fn create_model(
     state: State<'_, AppState>,
     input: CreateModelRequest,
-) -> CommandResult<girlagent_core::ModelConfig> {
+) -> CommandResult<girl_ai_agent_core::ModelConfig> {
     map_command_result(state.service.create_model(input).await)
 }
 
@@ -103,7 +103,7 @@ async fn update_model(
     state: State<'_, AppState>,
     id: String,
     input: UpdateModelRequest,
-) -> CommandResult<girlagent_core::ModelConfig> {
+) -> CommandResult<girl_ai_agent_core::ModelConfig> {
     map_command_result(state.service.update_model(&id, input).await)
 }
 
@@ -128,7 +128,7 @@ async fn probe_model_connection(
 #[tauri::command]
 async fn list_agents(
     state: State<'_, AppState>,
-) -> CommandResult<Vec<girlagent_core::AgentConfig>> {
+) -> CommandResult<Vec<girl_ai_agent_core::AgentConfig>> {
     map_command_result(state.service.list_agents().await)
 }
 
@@ -136,7 +136,7 @@ async fn list_agents(
 async fn create_agent(
     state: State<'_, AppState>,
     input: CreateAgentRequest,
-) -> CommandResult<girlagent_core::AgentConfig> {
+) -> CommandResult<girl_ai_agent_core::AgentConfig> {
     map_command_result(state.service.create_agent(input).await)
 }
 
@@ -145,7 +145,7 @@ async fn update_agent(
     state: State<'_, AppState>,
     id: String,
     input: UpdateAgentRequest,
-) -> CommandResult<girlagent_core::AgentConfig> {
+) -> CommandResult<girl_ai_agent_core::AgentConfig> {
     map_command_result(state.service.update_agent(&id, input).await)
 }
 
@@ -438,7 +438,7 @@ async fn clear_chat_session_messages(
 pub fn run() {
     let store = tauri::async_runtime::block_on(SqliteStore::connect(&database_url()))
         .expect("failed to initialize sqlite store");
-    let service = AppService::new(Arc::new(store), "Girl-AI-Agent", "0.1.0");
+    let service = AppService::new(Arc::new(store), "Girl-Ai-Agent", "0.1.0");
 
     tauri::Builder::default()
         .manage(AppState {
@@ -489,5 +489,6 @@ pub fn run() {
             clear_chat_session_messages
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Girl-AI-Agent");
+        .expect("failed to run Girl-Ai-Agent");
 }
+

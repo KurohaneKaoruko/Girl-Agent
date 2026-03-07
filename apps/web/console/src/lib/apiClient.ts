@@ -107,8 +107,8 @@ function isTauriRuntime(): boolean {
 }
 
 const DEFAULT_HEADLESS_BASE_URL = "http://127.0.0.1:8787";
-const HEADLESS_BASE_URL_KEY = "girlagent.headlessBaseUrl";
-const HEADLESS_TOKEN_KEY = "girlagent.headlessToken";
+const HEADLESS_BASE_URL_KEY = "girl-ai-agent.headlessBaseUrl";
+const HEADLESS_TOKEN_KEY = "girl-ai-agent.headlessToken";
 
 export function getHeadlessConfig() {
   return {
@@ -1137,3 +1137,4 @@ export function getApiClient(): ApiClient {
   }
   return singleton;
 }
+

@@ -1,13 +1,13 @@
-# GirlAgent
+# Girl-Ai-Agent
 
 [简体中文](./README.md) | English | [日本語](./README.ja.md)
 
-GirlAgent is an AI agent platform for building a feature-rich "girl agent" that can connect to any AI application.
+Girl-Ai-Agent is an AI agent platform for building a feature-rich "girl agent" that can connect to any AI application.
 
 ## Project Structure
 
 ```text
-GirlAgent/
+Girl-Ai-Agent/
 ├─ docs/                        # Product and architecture documents
 └─ apps/
    ├─ web/
@@ -52,8 +52,8 @@ cargo tauri build --manifest-path apps/app/Cargo.toml
 4. Start headless host (default `127.0.0.1:8787`):
 
 ```powershell
-$env:GIRLAGENT_TOKEN="your_token"
-cargo run -p girlagent-web-server
+$env:GIRL_AI_AGENT_TOKEN="your_token"
+cargo run -p girl-ai-agent-web-server
 ```
 
 ## Current Scope
@@ -81,3 +81,4 @@ pnpm run moon:check
 ## Optional Local Core Override
 
 To iterate on Core locally, copy `.cargo/config.toml.example` to `.cargo/config.toml` and use the local path patch.
+

@@ -7,8 +7,9 @@ tasks:
     args:
       - "check"
       - "-p"
-      - "girlagent-app"
+      - "girl-ai-agent-app"
 
   dev:
     command: "cargo"
     args: ["tauri", "dev"]
+

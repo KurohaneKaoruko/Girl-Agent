@@ -40,7 +40,7 @@ export function LoginPage({
       <section className="login-stage">
         <article className="login-brand-panel">
           <span className="hero-chip hero-chip-soft">G.A.A.</span>
-          <h1>Girl-AI-Agent 控制台</h1>
+          <h1>Girl-Ai-Agent 控制台</h1>
           <p>统一管理提供商、模型、智能体和多会话聊天，网页端与桌面端共用同一套界面。</p>
           <div className="login-feature-list">
             <article className="login-feature-card">
@@ -79,7 +79,7 @@ export function LoginPage({
               <input
                 autoComplete="current-password"
                 onChange={(event) => setToken(event.target.value)}
-                placeholder="输入 GIRLAGENT_TOKEN"
+                placeholder="输入 GIRL_AI_AGENT_TOKEN"
                 type="password"
                 value={token}
               />
@@ -99,3 +99,4 @@ export function LoginPage({
     </main>
   );
 }
+

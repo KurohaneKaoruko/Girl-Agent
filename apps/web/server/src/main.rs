@@ -9,8 +9,8 @@ use axum::{
     routing::{get, post, put},
     Json, Router,
 };
-use girlagent_core::error::ErrorPayload;
-use girlagent_core::{
+use girl_ai_agent_core::error::ErrorPayload;
+use girl_ai_agent_core::{
     AppError, AppService, ChatWithAgentRequest, ChatWithAgentResponse, ChatWithSessionRequest,
     ChatWithSessionResponse, CreateAgentRequest, CreateChatSessionRequest, CreateModelRequest,
     CreateProviderRequest, CreateWorkspaceChatSessionRequest, DuplicateChatSessionRequest,
@@ -77,25 +77,25 @@ struct UpdateAgentPayload {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_url =
-        std::env::var("GIRLAGENT_DB_URL").unwrap_or_else(|_| "sqlite://girlagent.db".to_string());
+        std::env::var("GIRL_AI_AGENT_DB_URL").unwrap_or_else(|_| "sqlite://girl-ai-agent.db".to_string());
     let bind_addr =
-        std::env::var("GIRLAGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
-    let token = std::env::var("GIRLAGENT_TOKEN").unwrap_or_else(|_| {
+        std::env::var("GIRL_AI_AGENT_BIND").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
+    let token = std::env::var("GIRL_AI_AGENT_TOKEN").unwrap_or_else(|_| {
         let generated = Uuid::new_v4().to_string();
-        eprintln!("GIRLAGENT_TOKEN not set, generated one-time token: {generated}");
+        eprintln!("GIRL_AI_AGENT_TOKEN not set, generated one-time token: {generated}");
         generated
     });
 
     let store = SqliteStore::connect(&db_url).await?;
     let state = AppState {
-        service: AppService::new(Arc::new(store), "Girl-AI-Agent", "0.1.0"),
+        service: AppService::new(Arc::new(store), "Girl-Ai-Agent", "0.1.0"),
         chat_gateway: OpenAICompatChatGateway::new(),
         bearer_token: token,
     };
 
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    println!("Girl-AI-Agent headless listening at http://{bind_addr}");
+    println!("Girl-Ai-Agent headless listening at http://{bind_addr}");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -251,7 +251,7 @@ fn map_error(error: AppError) -> (StatusCode, Json<ErrorPayload>) {
 
 async fn get_bootstrap(
     State(state): State<AppState>,
-) -> ApiResponse<girlagent_core::BootstrapResponse> {
+) -> ApiResponse<girl_ai_agent_core::BootstrapResponse> {
     state.service.bootstrap().await.map(Json).map_err(map_error)
 }
 
@@ -261,7 +261,7 @@ async fn get_runtime_status(State(state): State<AppState>) -> ApiResponse<Runtim
 
 async fn list_providers(
     State(state): State<AppState>,
-) -> ApiResponse<Vec<girlagent_core::ProviderConfig>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::ProviderConfig>> {
     state
         .service
         .list_providers()
@@ -273,7 +273,7 @@ async fn list_providers(
 async fn create_provider(
     State(state): State<AppState>,
     Json(input): Json<CreateProviderRequest>,
-) -> ApiResponse<girlagent_core::ProviderConfig> {
+) -> ApiResponse<girl_ai_agent_core::ProviderConfig> {
     state
         .service
         .create_provider(input)
@@ -286,7 +286,7 @@ async fn update_provider(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<UpdateProviderRequest>,
-) -> ApiResponse<girlagent_core::ProviderConfig> {
+) -> ApiResponse<girl_ai_agent_core::ProviderConfig> {
     state
         .service
         .update_provider(&id, input)
@@ -298,7 +298,7 @@ async fn update_provider(
 async fn update_provider_by_body(
     State(state): State<AppState>,
     Json(payload): Json<UpdateProviderPayload>,
-) -> ApiResponse<girlagent_core::ProviderConfig> {
+) -> ApiResponse<girl_ai_agent_core::ProviderConfig> {
     state
         .service
         .update_provider(&payload.id, payload.input)
@@ -345,7 +345,7 @@ async fn probe_provider_connection(
 
 async fn list_models(
     State(state): State<AppState>,
-) -> ApiResponse<Vec<girlagent_core::ModelConfig>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::ModelConfig>> {
     state
         .service
         .list_models()
@@ -357,7 +357,7 @@ async fn list_models(
 async fn create_model(
     State(state): State<AppState>,
     Json(input): Json<CreateModelRequest>,
-) -> ApiResponse<girlagent_core::ModelConfig> {
+) -> ApiResponse<girl_ai_agent_core::ModelConfig> {
     state
         .service
         .create_model(input)
@@ -370,7 +370,7 @@ async fn update_model(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<UpdateModelRequest>,
-) -> ApiResponse<girlagent_core::ModelConfig> {
+) -> ApiResponse<girl_ai_agent_core::ModelConfig> {
     state
         .service
         .update_model(&id, input)
@@ -382,7 +382,7 @@ async fn update_model(
 async fn update_model_by_body(
     State(state): State<AppState>,
     Json(payload): Json<UpdateModelPayload>,
-) -> ApiResponse<girlagent_core::ModelConfig> {
+) -> ApiResponse<girl_ai_agent_core::ModelConfig> {
     state
         .service
         .update_model(&payload.id, payload.input)
@@ -429,7 +429,7 @@ async fn probe_model_connection(
 
 async fn list_agents(
     State(state): State<AppState>,
-) -> ApiResponse<Vec<girlagent_core::AgentConfig>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::AgentConfig>> {
     state
         .service
         .list_agents()
@@ -441,7 +441,7 @@ async fn list_agents(
 async fn create_agent(
     State(state): State<AppState>,
     Json(input): Json<CreateAgentRequest>,
-) -> ApiResponse<girlagent_core::AgentConfig> {
+) -> ApiResponse<girl_ai_agent_core::AgentConfig> {
     state
         .service
         .create_agent(input)
@@ -454,7 +454,7 @@ async fn update_agent(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<UpdateAgentRequest>,
-) -> ApiResponse<girlagent_core::AgentConfig> {
+) -> ApiResponse<girl_ai_agent_core::AgentConfig> {
     state
         .service
         .update_agent(&id, input)
@@ -466,7 +466,7 @@ async fn update_agent(
 async fn update_agent_by_body(
     State(state): State<AppState>,
     Json(payload): Json<UpdateAgentPayload>,
-) -> ApiResponse<girlagent_core::AgentConfig> {
+) -> ApiResponse<girl_ai_agent_core::AgentConfig> {
     state
         .service
         .update_agent(&payload.id, payload.input)
@@ -502,7 +502,7 @@ async fn delete_agent_by_body(
 async fn list_agent_chat_messages(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> ApiResponse<Vec<girlagent_core::ChatMessage>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::ChatMessage>> {
     state
         .service
         .list_agent_chat_messages(&id)
@@ -525,7 +525,7 @@ async fn clear_agent_chat_messages(
 
 async fn list_workspace_chat_sessions(
     State(state): State<AppState>,
-) -> ApiResponse<Vec<girlagent_core::WorkspaceChatSession>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::WorkspaceChatSession>> {
     state
         .service
         .list_workspace_chat_sessions()
@@ -537,7 +537,7 @@ async fn list_workspace_chat_sessions(
 async fn create_workspace_chat_session(
     State(state): State<AppState>,
     Json(input): Json<CreateWorkspaceChatSessionRequest>,
-) -> ApiResponse<girlagent_core::WorkspaceChatSession> {
+) -> ApiResponse<girl_ai_agent_core::WorkspaceChatSession> {
     state
         .service
         .create_workspace_chat_session(input)
@@ -550,7 +550,7 @@ async fn update_workspace_chat_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(input): Json<UpdateWorkspaceChatSessionRequest>,
-) -> ApiResponse<girlagent_core::WorkspaceChatSession> {
+) -> ApiResponse<girl_ai_agent_core::WorkspaceChatSession> {
     state
         .service
         .update_workspace_chat_session(&session_id, input)
@@ -562,7 +562,7 @@ async fn update_workspace_chat_session(
 async fn update_workspace_chat_session_by_body(
     State(state): State<AppState>,
     Json(payload): Json<UpdateWorkspaceSessionPayload>,
-) -> ApiResponse<girlagent_core::WorkspaceChatSession> {
+) -> ApiResponse<girl_ai_agent_core::WorkspaceChatSession> {
     state
         .service
         .update_workspace_chat_session(&payload.session_id, payload.input)
@@ -598,7 +598,7 @@ async fn delete_workspace_chat_session_by_body(
 async fn list_workspace_chat_messages(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
-) -> ApiResponse<Vec<girlagent_core::WorkspaceChatMessage>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::WorkspaceChatMessage>> {
     state
         .service
         .list_workspace_chat_messages(&session_id)
@@ -622,7 +622,7 @@ async fn clear_workspace_chat_messages(
 async fn list_workspace_chat_messages_by_body(
     State(state): State<AppState>,
     Json(payload): Json<WorkspaceSessionIdPayload>,
-) -> ApiResponse<Vec<girlagent_core::WorkspaceChatMessage>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::WorkspaceChatMessage>> {
     state
         .service
         .list_workspace_chat_messages(&payload.session_id)
@@ -646,7 +646,7 @@ async fn clear_workspace_chat_messages_by_body(
 async fn list_agent_chat_sessions(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> ApiResponse<Vec<girlagent_core::ChatSession>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::ChatSession>> {
     state
         .service
         .list_agent_chat_sessions(&id)
@@ -659,7 +659,7 @@ async fn create_agent_chat_session(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<CreateChatSessionRequest>,
-) -> ApiResponse<girlagent_core::ChatSession> {
+) -> ApiResponse<girl_ai_agent_core::ChatSession> {
     state
         .service
         .create_agent_chat_session(&id, &input.title)
@@ -672,7 +672,7 @@ async fn rename_agent_chat_session(
     State(state): State<AppState>,
     Path((id, session_id)): Path<(String, String)>,
     Json(input): Json<RenameChatSessionRequest>,
-) -> ApiResponse<girlagent_core::ChatSession> {
+) -> ApiResponse<girl_ai_agent_core::ChatSession> {
     state
         .service
         .rename_agent_chat_session(&id, &session_id, &input.title)
@@ -697,7 +697,7 @@ async fn duplicate_agent_chat_session(
     State(state): State<AppState>,
     Path((id, session_id)): Path<(String, String)>,
     Json(input): Json<DuplicateChatSessionRequest>,
-) -> ApiResponse<girlagent_core::ChatSession> {
+) -> ApiResponse<girl_ai_agent_core::ChatSession> {
     state
         .service
         .duplicate_agent_chat_session(&id, &session_id, &input.title)
@@ -710,7 +710,7 @@ async fn set_agent_chat_session_pinned(
     State(state): State<AppState>,
     Path((id, session_id)): Path<(String, String)>,
     Json(input): Json<SetChatSessionPinnedRequest>,
-) -> ApiResponse<girlagent_core::ChatSession> {
+) -> ApiResponse<girl_ai_agent_core::ChatSession> {
     state
         .service
         .set_agent_chat_session_pinned(&id, &session_id, input.pinned)
@@ -723,7 +723,7 @@ async fn set_agent_chat_session_archived(
     State(state): State<AppState>,
     Path((id, session_id)): Path<(String, String)>,
     Json(input): Json<SetChatSessionArchivedRequest>,
-) -> ApiResponse<girlagent_core::ChatSession> {
+) -> ApiResponse<girl_ai_agent_core::ChatSession> {
     state
         .service
         .set_agent_chat_session_archived(&id, &session_id, input.archived)
@@ -736,7 +736,7 @@ async fn set_agent_chat_session_tags(
     State(state): State<AppState>,
     Path((id, session_id)): Path<(String, String)>,
     Json(input): Json<SetChatSessionTagsRequest>,
-) -> ApiResponse<girlagent_core::ChatSession> {
+) -> ApiResponse<girl_ai_agent_core::ChatSession> {
     state
         .service
         .set_agent_chat_session_tags(&id, &session_id, &input.tags)
@@ -748,7 +748,7 @@ async fn set_agent_chat_session_tags(
 async fn list_chat_session_messages(
     State(state): State<AppState>,
     Path((id, session_id)): Path<(String, String)>,
-) -> ApiResponse<Vec<girlagent_core::ChatMessage>> {
+) -> ApiResponse<Vec<girl_ai_agent_core::ChatMessage>> {
     state
         .service
         .list_chat_session_messages(&id, &session_id)
@@ -1002,3 +1002,4 @@ mod tests {
         assert!(split_stream_chunks("abc", 0).is_empty());
     }
 }
+

@@ -1,4 +1,4 @@
-# GirlAgent-App 交付检查清单
+# Girl-Ai-Agent-App 交付检查清单
 
 本清单用于发布前的最小可用验收，按顺序执行。
 
@@ -28,7 +28,7 @@ pnpm run verify:headless:running
 目标：要求探测可达并执行真实聊天调用（默认含 `/api/chat/stream` SSE 验证）。
 
 ```powershell
-$env:GIRLAGENT_PROVIDER_KEY="your_provider_key"
+$env:GIRL_AI_AGENT_PROVIDER_KEY="your_provider_key"
 pnpm run verify:headless:full
 # 可选：关闭流式验证
 # pnpm run verify:headless:full:no-stream
@@ -74,3 +74,4 @@ cargo tauri dev --manifest-path apps/app/Cargo.toml
 - 快速初始化（预设选择、连通校验开关、创建/复用提示）
 - 每个智能体独立聊天窗口与多会话操作
 - 流式回复“停止生成”按钮可中止前端流并自动回同步会话消息
+
