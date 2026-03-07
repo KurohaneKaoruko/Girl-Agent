@@ -665,55 +665,59 @@ export function ChatWorkspace({
                       </div>
                     );
                   }
-                  return (
-                    <div className={`chat-message-row ${roleClass}`} key={`${message.createdAt}-${index}`}>
-                      <div className={`chat-message-avatar ${roleClass}`}>{buildAvatarLabel(speaker)}</div>
-                      <div className={`chat-bubble ${roleClass === "assistant" ? "assistant" : "user"}`}>
-                        <div className="chat-bubble-head">
-                          <strong>{speaker}</strong>
-                          <small>{formatDateTime(message.createdAt)}</small>
-                        </div>
-                        <p>{message.content}</p>
-                      </div>
-                    </div>
-                  );
+	                  return (
+	                    <div className={`chat-message-row ${roleClass}`} key={`${message.createdAt}-${index}`}>
+	                      <div className={`chat-message-avatar ${roleClass}`}>{buildAvatarLabel(speaker)}</div>
+	                      <div className={`chat-message-stack ${roleClass}`}>
+	                        <div className="chat-message-meta">
+	                          <strong>{speaker}</strong>
+	                          <small>{formatDateTime(message.createdAt)}</small>
+	                        </div>
+	                        <div className={`chat-bubble ${roleClass === "assistant" ? "assistant" : "user"}`}>
+	                          <p>{message.content}</p>
+	                        </div>
+	                      </div>
+	                    </div>
+	                  );
                 })}
               </div>
 
-              <div className="chat-composer card">
-                <textarea
-                  onChange={(event) => setComposer(event.target.value)}
-                  onKeyDown={handleComposerKeyDown}
-                  placeholder="输入消息；如果会话里有仅 @ 回复的智能体，可以使用 @名称 定向触发。"
-                  rows={4}
-                  value={composer}
-                />
-                <div className="chat-composer-actions">
-                  <div className="chat-composer-hints">
-                    <span className="chat-composer-chip">
-                      {selectedSession.isGroup ? "群聊模式" : "单聊模式"}
-                    </span>
-                    <span className="chat-composer-chip">Enter 发送</span>
-                    <span className="chat-composer-chip">Shift + Enter 换行</span>
-                    {streaming && <span className="chat-composer-chip is-live">正在生成</span>}
-                  </div>
-                  <div className="actions">
-                    {streaming && (
-                      <button className="ghost" onClick={stopGeneration} type="button">
-                        停止生成
-                      </button>
-                    )}
-                    <button
-                      className="primary"
-                      disabled={disabled || sending || !composer.trim()}
-                      onClick={() => void sendMessage()}
-                      type="button"
-                    >
-                      {sending ? "发送中..." : "发送"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+	              <div className="chat-composer card">
+	                <div className="chat-composer-field">
+	                  <textarea
+	                    onChange={(event) => setComposer(event.target.value)}
+	                    onKeyDown={handleComposerKeyDown}
+	                    placeholder="输入消息；如果会话里有仅 @ 回复的智能体，可以使用 @名称 定向触发。"
+	                    rows={2}
+	                    value={composer}
+	                  />
+	                  <div className="chat-composer-footer">
+	                    <div className="chat-composer-hints">
+	                      <span className="chat-composer-chip">
+	                        {selectedSession.isGroup ? "群聊模式" : "单聊模式"}
+	                      </span>
+	                      <span className="chat-composer-chip">Enter 发送</span>
+	                      <span className="chat-composer-chip">Shift + Enter 换行</span>
+	                      {streaming && <span className="chat-composer-chip is-live">正在生成</span>}
+	                    </div>
+	                    <div className="actions chat-composer-inline-actions">
+	                      {streaming && (
+	                        <button className="ghost" onClick={stopGeneration} type="button">
+	                          停止生成
+	                        </button>
+	                      )}
+	                      <button
+	                        className="primary chat-composer-send"
+	                        disabled={disabled || sending || !composer.trim()}
+	                        onClick={() => void sendMessage()}
+	                        type="button"
+	                      >
+	                        {sending ? "发送中..." : "发送"}
+	                      </button>
+	                    </div>
+	                  </div>
+	                </div>
+	              </div>
             </div>
           ) : (
             <div className="chat-thread-shell chat-thread-empty-shell">
