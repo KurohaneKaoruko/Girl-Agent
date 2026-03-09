@@ -3,6 +3,7 @@ import { AgentSettings } from "@/features/agent/AgentSettings";
 import { ChatWorkspace } from "@/features/chat/ChatWorkspace";
 import { LoginPage } from "@/LoginPage";
 import { ModelSettings } from "@/features/model/ModelSettings";
+import { NetworkSettings } from "@/features/network/NetworkSettings";
 import { ProviderSettings } from "@/features/provider/ProviderSettings";
 import { describeApiError } from "@/lib/errorDisplay";
 import { getApiClient, getHeadlessConfig, setHeadlessConfig } from "@/lib/apiClient";
@@ -13,9 +14,12 @@ import type {
   ChatWithSessionRequest,
   CreateAgentRequest,
   CreateModelRequest,
+  CreateNetworkBindingRequest,
   CreateProviderRequest,
   CreateWorkspaceChatSessionRequest,
   ModelConfig,
+  NetworkBindingConfig,
+  NetworkBindingRuntimeStatus,
   ProbeModelConnectionRequest,
   ProbeModelConnectionResponse,
   ProbeProviderConnectionRequest,
@@ -24,11 +28,12 @@ import type {
   RuntimeStatusResponse,
   UpdateAgentRequest,
   UpdateModelRequest,
+  UpdateNetworkBindingRequest,
   UpdateProviderRequest,
   UpdateWorkspaceChatSessionRequest,
 } from "@/types";
 
-type MainSection = "overview" | "chat" | "provider" | "model" | "agent" | "settings";
+type MainSection = "overview" | "chat" | "provider" | "model" | "agent" | "network" | "settings";
 
 const fallbackBootstrap: AppBootstrap = {
   appName: "Girl-Ai-Agent",
@@ -48,6 +53,7 @@ const navItems: Array<{ key: MainSection; label: string; caption: string }> = [
   { key: "provider", label: "提供商", caption: "提供商配置" },
   { key: "model", label: "模型", caption: "模型编排" },
   { key: "agent", label: "智能体", caption: "角色设定" },
+  { key: "network", label: "网络", caption: "端口绑定" },
   { key: "settings", label: "设置", caption: "工作台设置" },
 ];
 
@@ -99,6 +105,8 @@ export function App() {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [networkBindings, setNetworkBindings] = useState<NetworkBindingConfig[]>([]);
+  const [networkRuntimeStatuses, setNetworkRuntimeStatuses] = useState<NetworkBindingRuntimeStatus[]>([]);
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatusResponse | null>(null);
   const [backendStatus, setBackendStatus] = useState("连接中");
   const [saving, setSaving] = useState(false);
@@ -120,30 +128,47 @@ export function App() {
   }, []);
 
   const loadAll = useCallback(async () => {
-    const [nextBootstrap, nextRuntimeStatus, nextProviders, nextModels, nextAgents] = await Promise.all([
+    const [
+      nextBootstrap,
+      nextRuntimeStatus,
+      nextProviders,
+      nextModels,
+      nextAgents,
+      nextNetworkBindings,
+      nextNetworkRuntimeStatuses,
+    ] = await Promise.all([
       api.getBootstrap(),
       api.getRuntimeStatus(),
       api.listProviders(),
       api.listModels(),
       api.listAgents(),
+      api.listNetworkBindings(),
+      api.listNetworkBindingRuntimeStatuses(),
     ]);
     setBootstrap(nextBootstrap);
     setRuntimeStatus(nextRuntimeStatus);
     setProviders(nextProviders);
     setModels(nextModels);
     setAgents(nextAgents);
+    setNetworkBindings(nextNetworkBindings);
+    setNetworkRuntimeStatuses(nextNetworkRuntimeStatuses);
     setBackendStatus("已连接");
     setError(null);
   }, []);
 
   const refreshRuntimeStatus = useCallback(async () => {
     try {
-      const next = await api.getRuntimeStatus();
+      const [next, nextNetworkRuntimeStatuses] = await Promise.all([
+        api.getRuntimeStatus(),
+        api.listNetworkBindingRuntimeStatuses(),
+      ]);
       setRuntimeStatus(next);
+      setNetworkRuntimeStatuses(nextNetworkRuntimeStatuses);
       setBackendStatus("已连接");
     } catch {
       setBackendStatus("未连接");
       setRuntimeStatus(null);
+      setNetworkRuntimeStatuses([]);
     }
   }, []);
 
@@ -229,6 +254,8 @@ export function App() {
     setProviders([]);
     setModels([]);
     setAgents([]);
+    setNetworkBindings([]);
+    setNetworkRuntimeStatuses([]);
     persistLoginState(false);
   }, [headlessBaseUrl]);
 
@@ -257,7 +284,11 @@ export function App() {
     () => agents.filter((agent) => agent.mode === "ambient").length,
     [agents],
   );
-  const totalResourceCount = providers.length + models.length + agents.length;
+  const totalResourceCount = providers.length + models.length + agents.length + networkBindings.length;
+  const runningNetworkBindingCount = useMemo(
+    () => networkRuntimeStatuses.filter((item) => item.running).length,
+    [networkRuntimeStatuses],
+  );
   const handleSectionSelect = useCallback((section: MainSection) => {
     setActiveSection(section);
     if (isMobileViewport()) {
@@ -294,6 +325,11 @@ export function App() {
       label: "预设",
       value: bootstrap.providerPresets.length,
       caption: "内置提供商模板",
+    },
+    {
+      label: "网络绑定",
+      value: networkBindings.length,
+      caption: "外部接入端口数",
     },
   ];
 
@@ -364,6 +400,7 @@ export function App() {
                   <span className="overview-meta-pill">入口：{isTauri ? "桌面端" : "网页端"}</span>
                   <span className="overview-meta-pill">后端：{backendStatus}</span>
                   <span className="overview-meta-pill">智能体：{agents.length}</span>
+                  <span className="overview-meta-pill">绑定：{networkBindings.length}</span>
                 </div>
               </div>
               <div className="overview-hero-actions">
@@ -415,7 +452,7 @@ export function App() {
                 <h3>运行环境</h3>
                 <small>入口类型：{isTauri ? "桌面端应用" : "网页控制台"}</small>
                 <small>Base URL：{headlessBaseUrl || "桌面端内置入口"}</small>
-                <small>提供商预设：{bootstrap.providerPresets.length}</small>
+                <small>运行中绑定：{runningNetworkBindingCount}</small>
               </article>
             </div>
           </section>
@@ -552,6 +589,42 @@ export function App() {
           />
         )}
 
+        {activeSection === "network" && (
+          <NetworkSettings
+            agents={agents}
+            bindings={networkBindings}
+            onCreate={(input: CreateNetworkBindingRequest) =>
+              withAction(async () => {
+                await api.createNetworkBinding(input);
+                setNetworkBindings(await api.listNetworkBindings());
+                await refreshRuntimeStatus();
+              })
+            }
+            onDelete={(id: string) =>
+              withAction(async () => {
+                await api.deleteNetworkBinding(id);
+                setNetworkBindings(await api.listNetworkBindings());
+                await refreshRuntimeStatus();
+              })
+            }
+            onRestart={(id: string) =>
+              withAction(async () => {
+                await api.restartNetworkBinding(id);
+                await refreshRuntimeStatus();
+              })
+            }
+            onUpdate={(id: string, input: UpdateNetworkBindingRequest) =>
+              withAction(async () => {
+                await api.updateNetworkBinding(id, input);
+                setNetworkBindings(await api.listNetworkBindings());
+                await refreshRuntimeStatus();
+              })
+            }
+            runtimeStatuses={networkRuntimeStatuses}
+            saving={saving}
+          />
+        )}
+
         {activeSection === "settings" && (
           <section className="panel">
             <header className="panel-header workspace-section-hero">
@@ -564,6 +637,7 @@ export function App() {
                   <span className="workspace-section-pill">Base URL：{headlessBaseUrl || "桌面端内置入口"}</span>
                   <span className="workspace-section-pill">会话：{runtimeStatus?.sessionCount ?? 0}</span>
                   <span className="workspace-section-pill">Ambient 智能体：{ambientAgentCount}</span>
+                  <span className="workspace-section-pill">运行中绑定：{runningNetworkBindingCount}</span>
                 </div>
               </div>
             </header>
@@ -608,6 +682,11 @@ export function App() {
                     <span>智能体</span>
                     <strong>{agents.length}</strong>
                     <small>常驻 {ambientAgentCount}</small>
+                  </article>
+                  <article className="settings-fact-card">
+                    <span>网络绑定</span>
+                    <strong>{networkBindings.length}</strong>
+                    <small>运行中 {runningNetworkBindingCount}</small>
                   </article>
                   <article className="settings-fact-card">
                     <span>会话</span>

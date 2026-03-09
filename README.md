@@ -9,6 +9,11 @@
 ```text
 Girl-Ai-Agent/
 ├─ docs/                        # 产品与架构文档
+├─ crates/
+│  ├─ app-contracts/            # App 仓内共享的 Rust 契约
+│  ├─ app-domain/               # App 仓内本地拥有的领域模块与运行时入口
+│  ├─ app-host-core/            # Web/Tauri 共用的 bootstrap/runtime 装配
+│  └─ network-binding/          # App 产品内的网络绑定能力
 └─ apps/
    ├─ web/
    │  ├─ server/                # 无头宿主（Axum + Bearer）
@@ -16,9 +21,7 @@ Girl-Ai-Agent/
    └─ app/                      # 应用宿主（当前基于 Tauri）
 ```
 
-核心库使用独立仓库依赖：
-
-- `git@github.com:KurohaneKaoruko/Girl-Agent-Core.git`
+当前工作区只保留 `App` 与 `Game` 两个产品仓；App 产品域能力由仓内 `app-domain` 本地承载。
 
 ## 技术栈
 
@@ -69,12 +72,23 @@ cargo run -p girl-ai-agent-web-server
 - 设计文档位于 `docs/`
 - Web 控制台在零配置时展示快速初始化卡片，输入 Provider Key 即可自动创建 Provider/Model/Agent 并开始聊天
 - 聊天工作台支持流式回复中“停止生成”，中止后自动回同步会话消息
+- Web console 的 `dev/build` 现已内置 Rust -> TS 契约同步，不再要求手动先跑一遍导出脚本
 
 ## Monorepo 命令
 
 ```powershell
 # Rust 全量检查
 cargo check --workspace
+
+# 从 Rust contracts/domain 导出前端类型
+pnpm run sync:contracts:app
+
+# 仅校验生成文件是否已同步
+pnpm run check:contracts:app
+
+# 直接运行前端 dev/build 时会自动先同步契约
+pnpm --dir apps/web/console dev
+pnpm --dir apps/web/console build
 
 # 无头版验收（自动起服务 + 配置 + 可选聊天验证）
 $env:GIRL_AI_AGENT_PROVIDER_KEY="your_provider_key"
@@ -111,7 +125,7 @@ pnpm run verify:headless:summary
 pnpm run moon:check
 ```
 
-## 本地联调 Core（可选）
+## 本地联调说明
 
-如需在本机调试 Core，请复制 `.cargo/config.toml.example` 为 `.cargo/config.toml`，启用本地 path 覆盖。
+当前仓内不需要额外的跨仓 path patch；直接在本仓内迭代即可。
 

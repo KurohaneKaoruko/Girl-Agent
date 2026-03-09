@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.6.0",
   "scripts": {
+    "sync:contracts:app": "node ./scripts/export-app-contracts.mjs",
+    "check:contracts:app": "node ./scripts/export-app-contracts.mjs --check",
     "dev:web": "pnpm --dir apps/web/console dev",
     "dev:app": "cargo tauri dev --manifest-path apps/app/Cargo.toml",
     "build:web": "pnpm --dir apps/web/console build",

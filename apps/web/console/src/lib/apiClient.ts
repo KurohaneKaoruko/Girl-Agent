@@ -11,9 +11,12 @@ import type {
   ChatWithSessionResponse,
   CreateAgentRequest,
   CreateModelRequest,
+  CreateNetworkBindingRequest,
   CreateProviderRequest,
   CreateWorkspaceChatSessionRequest,
   ModelConfig,
+  NetworkBindingConfig,
+  NetworkBindingRuntimeStatus,
   ProbeModelConnectionRequest,
   ProbeModelConnectionResponse,
   ProbeProviderConnectionRequest,
@@ -27,6 +30,7 @@ import type {
   UndoLastChatTurnResponse,
   UpdateAgentRequest,
   UpdateModelRequest,
+  UpdateNetworkBindingRequest,
   UpdateProviderRequest,
   UpdateWorkspaceChatSessionRequest,
   WorkspaceChatMessage,
@@ -53,6 +57,12 @@ export type ApiClient = {
   createAgent(input: CreateAgentRequest): Promise<AgentConfig>;
   updateAgent(id: string, input: UpdateAgentRequest): Promise<AgentConfig>;
   deleteAgent(id: string): Promise<void>;
+  listNetworkBindings(): Promise<NetworkBindingConfig[]>;
+  createNetworkBinding(input: CreateNetworkBindingRequest): Promise<NetworkBindingConfig>;
+  updateNetworkBinding(id: string, input: UpdateNetworkBindingRequest): Promise<NetworkBindingConfig>;
+  deleteNetworkBinding(id: string): Promise<void>;
+  listNetworkBindingRuntimeStatuses(): Promise<NetworkBindingRuntimeStatus[]>;
+  restartNetworkBinding(id: string): Promise<NetworkBindingRuntimeStatus>;
   listWorkspaceChatSessions(): Promise<WorkspaceChatSession[]>;
   createWorkspaceChatSession(input: CreateWorkspaceChatSessionRequest): Promise<WorkspaceChatSession>;
   updateWorkspaceChatSession(
@@ -381,6 +391,32 @@ class DesktopClient implements ApiClient {
 
   deleteAgent(id: string) {
     return invokeCommand<void>("delete_agent", { id });
+  }
+
+  listNetworkBindings() {
+    return invokeCommand<NetworkBindingConfig[]>("list_network_bindings");
+  }
+
+  createNetworkBinding(input: CreateNetworkBindingRequest) {
+    return invokeCommand<NetworkBindingConfig>("create_network_binding", { input });
+  }
+
+  updateNetworkBinding(id: string, input: UpdateNetworkBindingRequest) {
+    return invokeCommand<NetworkBindingConfig>("update_network_binding", { id, input });
+  }
+
+  deleteNetworkBinding(id: string) {
+    return invokeCommand<void>("delete_network_binding", { id });
+  }
+
+  listNetworkBindingRuntimeStatuses() {
+    return invokeCommand<NetworkBindingRuntimeStatus[]>(
+      "list_network_binding_runtime_statuses",
+    );
+  }
+
+  restartNetworkBinding(id: string) {
+    return invokeCommand<NetworkBindingRuntimeStatus>("restart_network_binding", { id });
   }
 
   listWorkspaceChatSessions() {
@@ -718,6 +754,40 @@ class HeadlessClient implements ApiClient {
     return this.request<void>("/api/agents/delete", {
       method: "POST",
       body: JSON.stringify({ id }),
+    });
+  }
+
+  listNetworkBindings() {
+    return this.request<NetworkBindingConfig[]>("/api/network-bindings");
+  }
+
+  createNetworkBinding(input: CreateNetworkBindingRequest) {
+    return this.request<NetworkBindingConfig>("/api/network-bindings", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateNetworkBinding(id: string, input: UpdateNetworkBindingRequest) {
+    return this.request<NetworkBindingConfig>(`/api/network-bindings/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteNetworkBinding(id: string) {
+    return this.request<void>(`/api/network-bindings/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  listNetworkBindingRuntimeStatuses() {
+    return this.request<NetworkBindingRuntimeStatus[]>("/api/runtime/network-bindings");
+  }
+
+  restartNetworkBinding(id: string) {
+    return this.request<NetworkBindingRuntimeStatus>(`/api/runtime/network-bindings/${id}/restart`, {
+      method: "POST",
     });
   }
 

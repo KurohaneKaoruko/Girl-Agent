@@ -9,6 +9,11 @@ Girl-Ai-Agent is an AI agent platform for building a feature-rich "girl agent" t
 ```text
 Girl-Ai-Agent/
 ├─ docs/                        # Product and architecture documents
+├─ crates/
+│  ├─ app-contracts/            # Shared Rust host contracts inside the App repo
+│  ├─ app-domain/               # App-owned domain/runtime implementation
+│  ├─ app-host-core/            # Shared bootstrap/runtime builders for Web + Tauri
+│  └─ network-binding/          # Network binding feature owned by the App product
 └─ apps/
    ├─ web/
    │  ├─ server/                # Headless host (Axum + Bearer auth)
@@ -16,9 +21,7 @@ Girl-Ai-Agent/
    └─ app/                      # App host (currently powered by Tauri + Rust)
 ```
 
-Core is consumed from an independent repository:
-
-- `git@github.com:KurohaneKaoruko/Girl-Agent-Core.git`
+This workspace now keeps only the `App` and `Game` product repos. App-specific domain logic lives inside `crates/app-domain`, while Rust -> TypeScript contract export is handled inside this repo.
 
 ## Tech Stack
 
@@ -59,9 +62,9 @@ cargo run -p girl-ai-agent-web-server
 ## Current Scope
 
 - Project framework initialized
-- Core principle defined: connect to any AI application
+- Primary principle defined: connect to any AI application
 - Minimal dual runtime delivered: app host + headless
-- Core settings UI skeleton:
+- Main settings UI skeleton:
   - Provider settings
   - Model settings
   - Agent settings
@@ -78,7 +81,17 @@ cargo check --workspace
 pnpm run moon:check
 ```
 
-## Optional Local Core Override
+## Contract Workflow
 
-To iterate on Core locally, copy `.cargo/config.toml.example` to `.cargo/config.toml` and use the local path patch.
+```powershell
+# Export Rust contracts/domain types for the web console
+pnpm run sync:contracts:app
+
+# Check whether generated frontend types are up to date
+pnpm run check:contracts:app
+
+# Direct console dev/build also auto-sync contracts first
+pnpm --dir apps/web/console dev
+pnpm --dir apps/web/console build
+```
 
