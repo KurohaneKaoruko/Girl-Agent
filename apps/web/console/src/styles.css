@@ -30,7 +30,9 @@
   --shadow-soft: 0 26px 70px rgba(74, 55, 121, 0.12);
   --shadow-card: 0 18px 38px rgba(77, 56, 117, 0.1);
   --shadow-pill: 0 10px 24px rgba(101, 80, 148, 0.12);
-  --shell-sidebar-width: 244px;
+  --shell-sidebar-width-expanded: 268px;
+  --shell-sidebar-width-collapsed: 96px;
+  --shell-sidebar-width: var(--shell-sidebar-width-expanded);
   --shell-gap: 14px;
   --shell-pad-top: 22px;
   --shell-pad-x: 18px;
@@ -173,12 +175,52 @@ p {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   display: grid;
   gap: 5px;
+  transition:
+    padding 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
 }
 
 .app-brand-main {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  transition: gap 180ms ease;
+}
+
+.app-brand-mark {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: #fff1fb;
+  background: linear-gradient(145deg, rgba(255, 131, 179, 0.32), rgba(120, 115, 255, 0.24));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.app-brand-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.app-brand-copy {
+  display: grid;
   gap: 5px;
   min-width: 0;
+  overflow: hidden;
+  max-width: 196px;
+  max-height: 72px;
+  transition:
+    max-width 220ms ease,
+    max-height 220ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
 }
 
 .app-brand-kicker {
@@ -192,15 +234,17 @@ p {
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .app-brand h1 {
-  font-size: clamp(20px, 1.8vw, 22px);
+  font-size: clamp(18px, 1.7vw, 21px);
   line-height: 1.08;
   letter-spacing: 0.02em;
   overflow-wrap: normal;
   word-break: keep-all;
   hyphens: manual;
+  white-space: nowrap;
 }
 
 .app-sidebar-toggle {
@@ -267,19 +311,23 @@ p {
 
 .app-nav-item {
   text-align: left;
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
   color: #f7f3ff;
   cursor: pointer;
+  min-height: 58px;
   transition:
     transform 160ms ease,
     border-color 160ms ease,
     background-color 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow 160ms ease,
+    gap 180ms ease,
+    padding 180ms ease;
 }
 
 .app-nav-item:hover:not(:disabled) {
@@ -296,9 +344,45 @@ p {
   box-shadow: 0 18px 36px rgba(24, 16, 49, 0.26);
 }
 
+.app-nav-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.app-nav-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.app-nav-item.active .app-nav-icon {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.app-nav-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 188px;
+  transition:
+    max-width 220ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+
 .app-nav-label {
   font-size: 14px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .app-nav-caption {
@@ -306,6 +390,7 @@ p {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(233, 225, 255, 0.68);
+  white-space: nowrap;
 }
 
 .app-sidebar-footer {
@@ -323,17 +408,42 @@ p {
   border: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
+  gap: 8px;
+  transition:
+    gap 180ms ease,
+    padding 180ms ease;
 }
 
 .sidebar-status-pill.online {
   background: linear-gradient(135deg, rgba(57, 167, 124, 0.18), rgba(91, 120, 255, 0.14));
 }
 
-.sidebar-status-pill span {
+.sidebar-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: rgba(255, 194, 227, 0.74);
+  box-shadow: 0 0 0 4px rgba(255, 194, 227, 0.12);
+}
+
+.sidebar-status-pill.online .sidebar-status-dot {
+  background: #73f0bb;
+  box-shadow: 0 0 0 4px rgba(115, 240, 187, 0.12);
+}
+
+.sidebar-status-text {
   color: rgba(244, 240, 255, 0.92);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 176px;
+  transition:
+    max-width 220ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
 }
 
 .sidebar-meta {
@@ -343,6 +453,18 @@ p {
   color: rgba(232, 227, 245, 0.64);
   font-size: 11px;
   line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 208px;
+  transition:
+    max-width 220ms ease,
+    max-height 220ms ease,
+    opacity 140ms ease,
+    transform 180ms ease;
+}
+
+.sidebar-meta span {
+  white-space: nowrap;
 }
 
 .app-content {
@@ -360,6 +482,135 @@ p {
   flex-direction: column;
   gap: 12px;
   overflow: auto;
+}
+
+@media (min-width: 1121px) {
+  .console-shell {
+    --shell-sidebar-width: var(--shell-sidebar-width-collapsed);
+    grid-template-columns: var(--shell-sidebar-width-collapsed) minmax(0, 1fr);
+    overflow: visible;
+  }
+
+  .app-sidebar {
+    width: var(--shell-sidebar-width-collapsed);
+    justify-self: start;
+    overflow: hidden;
+    z-index: 2;
+    transition:
+      width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 180ms ease;
+    will-change: width;
+  }
+
+  .app-sidebar:hover,
+  .app-sidebar:focus-within {
+    width: var(--shell-sidebar-width-expanded);
+  }
+
+  .app-brand-copy {
+    max-width: 0;
+    max-height: 0;
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+  }
+
+  .app-brand-main {
+    gap: 0;
+  }
+
+  .app-nav-item {
+    gap: 0;
+    padding-inline: 20px;
+  }
+
+  .app-nav-copy {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+  }
+
+  .sidebar-status-pill {
+    gap: 0;
+    padding-inline: 30px;
+  }
+
+  .sidebar-status-text {
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+  }
+
+  .sidebar-meta {
+    max-width: 0;
+    max-height: 0;
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+  }
+
+  .app-sidebar:hover .app-brand-copy,
+  .app-sidebar:focus-within .app-brand-copy {
+    max-width: 196px;
+    max-height: 72px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .app-sidebar:hover .app-brand-main,
+  .app-sidebar:focus-within .app-brand-main {
+    gap: 10px;
+  }
+
+  .app-sidebar:hover .app-nav-item,
+  .app-sidebar:focus-within .app-nav-item {
+    gap: 12px;
+    padding-inline: 12px;
+  }
+
+  .app-sidebar:hover .app-nav-copy,
+  .app-sidebar:focus-within .app-nav-copy {
+    max-width: 188px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .app-sidebar:hover .sidebar-status-pill,
+  .app-sidebar:focus-within .sidebar-status-pill {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .app-sidebar:hover .sidebar-status-text,
+  .app-sidebar:focus-within .sidebar-status-text {
+    max-width: 176px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .app-sidebar:hover .sidebar-meta,
+  .app-sidebar:focus-within .sidebar-meta {
+    max-width: 208px;
+    max-height: 20px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .app-brand-copy,
+  .app-nav-copy,
+  .sidebar-status-text,
+  .sidebar-meta {
+    transition: none;
+  }
 }
 
 .app-content-hero {

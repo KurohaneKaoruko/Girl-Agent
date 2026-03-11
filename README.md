@@ -9,10 +9,10 @@
 ```text
 Girl-Ai-Agent/
 ├─ docs/                        # 产品与架构文档
-├─ crates/
-│  ├─ app-contracts/            # App 仓内共享的 Rust 契约
-│  ├─ app-domain/               # App 仓内本地拥有的领域模块与运行时入口
-│  ├─ app-host-core/            # Web/Tauri 共用的 bootstrap/runtime 装配
+├─ core/
+│  ├─ contracts/                # App 仓内共享的 Rust 契约
+│  ├─ domain/                   # App 仓内本地拥有的领域模块与运行时入口
+│  ├─ host-core/                # Web/Tauri 共用的 bootstrap/runtime 装配
 │  └─ network-binding/          # App 产品内的网络绑定能力
 └─ apps/
    ├─ web/
@@ -21,7 +21,7 @@ Girl-Ai-Agent/
    └─ app/                      # 应用宿主（当前基于 Tauri）
 ```
 
-当前工作区只保留 `App` 与 `Game` 两个产品仓；App 产品域能力由仓内 `app-domain` 本地承载。
+当前工作区只保留 `App` 与 `Game` 两个产品仓；App 产品域能力由仓内 `core/domain` 本地承载。
 
 ## 技术栈
 

@@ -9,10 +9,10 @@ Girl-Ai-Agent is an AI agent platform for building a feature-rich "girl agent" t
 ```text
 Girl-Ai-Agent/
 ├─ docs/                        # Product and architecture documents
-├─ crates/
-│  ├─ app-contracts/            # Shared Rust host contracts inside the App repo
-│  ├─ app-domain/               # App-owned domain/runtime implementation
-│  ├─ app-host-core/            # Shared bootstrap/runtime builders for Web + Tauri
+├─ core/
+│  ├─ contracts/                # Shared Rust host contracts inside the App repo
+│  ├─ domain/                   # App-owned domain/runtime implementation
+│  ├─ host-core/                # Shared bootstrap/runtime builders for Web + Tauri
 │  └─ network-binding/          # Network binding feature owned by the App product
 └─ apps/
    ├─ web/
@@ -21,7 +21,7 @@ Girl-Ai-Agent/
    └─ app/                      # App host (currently powered by Tauri + Rust)
 ```
 
-This workspace now keeps only the `App` and `Game` product repos. App-specific domain logic lives inside `crates/app-domain`, while Rust -> TypeScript contract export is handled inside this repo.
+This workspace now keeps only the `App` and `Game` product repos. App-specific domain logic lives inside `core/domain`, while Rust -> TypeScript contract export is handled inside this repo.
 
 ## Tech Stack
 

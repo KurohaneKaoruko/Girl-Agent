@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 girl-ai-agent-app-contracts.workspace = true
 girl-ai-agent-app-domain.workspace = true
 girl-ai-agent-app-host-core.workspace = true
-girl-ai-agent-network-binding = { path = "../../crates/network-binding" }
+girl-ai-agent-network-binding.workspace = true
 serde.workspace = true
 tauri = { version = "2", features = [] }
 

@@ -7,10 +7,10 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
 const sources = [
-  path.join(repoRoot, "crates", "app-contracts", "src", "lib.rs"),
-  path.join(repoRoot, "crates", "app-domain", "src", "dto.rs"),
-  path.join(repoRoot, "crates", "app-domain", "src", "types.rs"),
-  path.join(repoRoot, "crates", "network-binding", "src", "types.rs"),
+  path.join(repoRoot, "core", "contracts", "src", "lib.rs"),
+  path.join(repoRoot, "core", "domain", "src", "dto.rs"),
+  path.join(repoRoot, "core", "domain", "src", "types.rs"),
+  path.join(repoRoot, "core", "network-binding", "src", "types.rs"),
 ];
 
 const outputPath = path.join(

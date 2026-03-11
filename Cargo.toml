@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/web/server", "apps/app", "crates/network-binding", "crates/app-contracts", "crates/app-host-core", "crates/app-domain"]
+members = ["apps/web/server", "apps/app", "core/network-binding", "core/contracts", "core/host-core", "core/domain"]
 resolver = "2"
 
 [workspace.package]
@@ -24,7 +24,8 @@ futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio-tungstenite = "0.24"
 url = "2"
-girl-ai-agent-app-contracts = { path = "crates/app-contracts" }
-girl-ai-agent-app-host-core = { path = "crates/app-host-core" }
-girl-ai-agent-app-domain = { path = "crates/app-domain" }
+girl-ai-agent-app-contracts = { path = "core/contracts" }
+girl-ai-agent-app-host-core = { path = "core/host-core" }
+girl-ai-agent-app-domain = { path = "core/domain" }
+girl-ai-agent-network-binding = { path = "core/network-binding" }
 

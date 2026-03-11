@@ -34,6 +34,97 @@ import type {
 } from "@/types";
 
 type MainSection = "overview" | "chat" | "provider" | "model" | "agent" | "network" | "settings";
+type NavIconName = MainSection;
+
+function NavIcon({ icon }: { icon: NavIconName }) {
+  switch (icon) {
+    case "overview":
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M5 5h5v5H5V5Zm9 0h5v7h-5V5ZM5 14h7v5H5v-5Zm11 1h3v4h-3v-4Z"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      );
+    case "chat":
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M6 17.5 3.5 20v-5A8.5 8.5 0 1 1 12 20.5H6Z"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      );
+    case "provider":
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M8.5 6.5h3v4h-3a2 2 0 0 0 0 4h3v4h-3a6 6 0 0 1 0-12Zm7 0a6 6 0 0 1 0 12h-3v-4h3a2 2 0 0 0 0-4h-3v-4h3Z"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      );
+    case "model":
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M12 4 4 8l8 4 8-4-8-4Zm-8 8 8 4 8-4M4 16l8 4 8-4"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      );
+    case "agent":
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M12 13a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-6.5 6a6.5 6.5 0 0 1 13 0"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      );
+    case "network":
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M12 6.5a6.5 6.5 0 0 0-6.2 4.6H4a2.5 2.5 0 0 0 0 5h2.2a6.5 6.5 0 0 0 11.6 0H20a2.5 2.5 0 0 0 0-5h-1.8A6.5 6.5 0 0 0 12 6.5Zm0 4v4"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      );
+    default:
+      return (
+        <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+          <path
+            d="M12 3.5v3m0 11v3m8.5-8.5h-3m-11 0h-3m12.4 5.9-2.1-2.1m-7.6 0-2.1 2.1m0-11.8 2.1 2.1m7.6 0 2.1-2.1"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+          <circle cx="12" cy="12" fill="currentColor" r="2.6" />
+        </svg>
+      );
+  }
+}
 
 const fallbackBootstrap: AppBootstrap = {
   appName: "Girl-Ai-Agent",
@@ -47,14 +138,14 @@ const api = getApiClient();
 const LOGIN_SESSION_KEY = "girl-ai-agent.console.loggedIn.v1";
 const MOBILE_NAV_MEDIA_QUERY = "(max-width: 880px)";
 
-const navItems: Array<{ key: MainSection; label: string; caption: string }> = [
-  { key: "overview", label: "总览", caption: "控制中心" },
-  { key: "chat", label: "聊天", caption: "实时对话" },
-  { key: "provider", label: "提供商", caption: "提供商配置" },
-  { key: "model", label: "模型", caption: "模型编排" },
-  { key: "agent", label: "智能体", caption: "角色设定" },
-  { key: "network", label: "网络", caption: "端口绑定" },
-  { key: "settings", label: "设置", caption: "工作台设置" },
+const navItems: Array<{ key: MainSection; label: string; caption: string; icon: NavIconName }> = [
+  { key: "overview", label: "总览", caption: "控制中心", icon: "overview" },
+  { key: "chat", label: "聊天", caption: "实时对话", icon: "chat" },
+  { key: "provider", label: "提供商", caption: "提供商配置", icon: "provider" },
+  { key: "model", label: "模型", caption: "模型编排", icon: "model" },
+  { key: "agent", label: "智能体", caption: "角色设定", icon: "agent" },
+  { key: "network", label: "网络", caption: "端口绑定", icon: "network" },
+  { key: "settings", label: "设置", caption: "工作台设置", icon: "settings" },
 ];
 
 const readPersistedLoginState = (): boolean => {
@@ -350,8 +441,21 @@ export function App() {
       <aside className={isMobileNavOpen ? "app-sidebar mobile-nav-open" : "app-sidebar"}>
         <div className="app-brand">
           <div className="app-brand-main">
-            <span className="app-brand-kicker">少女智能体控制台</span>
-            <h1>Girl-Ai-Agent</h1>
+            <span aria-hidden="true" className="app-brand-mark">
+              <svg fill="none" viewBox="0 0 24 24">
+                <path
+                  d="m12 4 2.3 4.8L19.5 10l-3.8 3.7.9 5.3L12 16.5 7.4 19l.9-5.3L4.5 10l5.2-1.2L12 4Z"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.7"
+                />
+              </svg>
+            </span>
+            <div className="app-brand-copy">
+              <span className="app-brand-kicker">少女智能体控制台</span>
+              <h1>Girl-Ai-Agent</h1>
+            </div>
           </div>
           <button
             aria-controls="console-nav"
@@ -369,16 +473,23 @@ export function App() {
               className={item.key === activeSection ? "app-nav-item active" : "app-nav-item"}
               key={item.key}
               onClick={() => handleSectionSelect(item.key)}
+              title={item.label}
               type="button"
             >
-              <span className="app-nav-label">{item.label}</span>
-              <span className="app-nav-caption">{item.caption}</span>
+              <span aria-hidden="true" className="app-nav-icon">
+                <NavIcon icon={item.icon} />
+              </span>
+              <span className="app-nav-copy">
+                <span className="app-nav-label">{item.label}</span>
+                <span className="app-nav-caption">{item.caption}</span>
+              </span>
             </button>
           ))}
         </nav>
         <div className="app-sidebar-footer">
           <div className={backendStatus === "已连接" ? "sidebar-status-pill online" : "sidebar-status-pill"}>
-            <span>后端：{backendStatus}</span>
+            <span aria-hidden="true" className="sidebar-status-dot" />
+            <span className="sidebar-status-text">后端：{backendStatus}</span>
           </div>
           <div className="sidebar-meta">
             <span>v{bootstrap.appVersion}</span>
